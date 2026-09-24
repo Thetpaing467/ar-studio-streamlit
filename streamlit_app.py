@@ -23,7 +23,7 @@ WORK = APP_DIR / "work"
 WORK.mkdir(exist_ok=True)
 
 MAX_SECONDS = 600
-DEFAULT_MODEL = "gemini-2.0-flash-exp"
+DEFAULT_MODEL = "gemini-3.6-flash"
 VOXCPM_SPACE = "hgghfhjfhjguyjf/Voxcpm-Burmese-Tts"
 PASSWORD = "voxcpm2026"
 
