@@ -12,6 +12,8 @@ from gradio_client import Client, handle_file
 LANGUAGE = "Myanmar"
 MODEL = "gemini-3.6-flash"
 VOXCPM_SPACE = "openbmb/VoxCPM-Demo"
+FONT_FILE = "akkayar.ttf"
+FONT_NAME = "Akkhayar"
 
 # ===== Password Check =====
 PASSWORD = "voxcpm2026"
@@ -59,7 +61,7 @@ class KeyManager:
         return len(self.keys) - len(self.exhausted)
 
 
-def call_gemini(contents, km, config=None):
+def call_gemini(contents, km):
     attempts = 0
     max_total = len(km.keys) * 3 if km.keys else 3
     last_err = None
@@ -69,10 +71,6 @@ def call_gemini(contents, km, config=None):
             km.current_index = 0
         client = km.get_client()
         try:
-            if config:
-                return client.models.generate_content(
-                    model=MODEL, contents=contents, config=config
-                )
             return client.models.generate_content(model=MODEL, contents=contents)
         except Exception as e:
             last_err = e
@@ -159,7 +157,7 @@ def run_tts_chunked(text, output_path, ref_audio_path=None, progress_callback=No
 
 
 # ============================================================
-# 🆕 SRT — Script + Audio Duration
+# SRT — Script + Audio Duration
 # ============================================================
 def srt_time(sec):
     ms = int(round((sec - int(sec)) * 1000))
@@ -173,7 +171,6 @@ def srt_time(sec):
 
 
 def script_to_srt(script, audio_path, srt_path):
-    """Script + Audio duration → SRT (millisecond)"""
     audio_dur = float(ffmpeg.probe(audio_path)['format']['duration'])
 
     sentences = script.replace("။", "။|").split("|")
@@ -240,19 +237,13 @@ if st.session_state.ref_audio_path:
 else:
     st.sidebar.warning("⚠️ Clone လုပ်ချင်ရင် အသံ တင်ပါ")
 
-# ===== 🆕 Sidebar — Subtitle Settings =====
+# ===== Sidebar — Subtitle =====
 st.sidebar.header("📝 Subtitle")
 use_subtitle = st.sidebar.toggle("SRT ထည့်", value=True)
 
 if use_subtitle:
-    sub_position = st.sidebar.selectbox(
-        "နေရာ",
-        ["bottom", "center", "top"],
-        format_func=lambda x: {"bottom": "အောက်ခြေ", "center": "အလယ်", "top": "အပေါ်"}[x]
-    )
     sub_font_size = st.sidebar.slider("Font Size", 16, 48, 26)
 else:
-    sub_position = "bottom"
     sub_font_size = 26
 
 # ===== Video Upload =====
@@ -315,7 +306,7 @@ if video_file is not None:
             st.error(f"❌ VoxCPM2 error: {e}")
             st.stop()
 
-        # ===== 🆕 SRT ဖန်တီး =====
+        # ===== SRT ဖန်တီး =====
         srt_path = None
         if use_subtitle:
             with st.spinner("📝 Script → SRT..."):
@@ -341,13 +332,19 @@ if video_file is not None:
             )
             ffmpeg.run(stream, overwrite_output=True)
 
-            # 2. 🆕 SRT မြှုပ် (ရွေးထားရင်)
+            # 2. SRT မြှုပ် (Font Fix)
             if use_subtitle and srt_path:
                 with st.spinner("📝 SRT မြှုပ်ထည့်နေသည်..."):
+                    srt_esc = srt_path.replace("\\", "/").replace(":", "\\:")
+                    font_dir = os.getcwd()
+                    font_path = os.path.join(font_dir, FONT_FILE)
+
+                    st.write(f"🔤 Font: {font_path} | Exists: {os.path.exists(font_path)}")
+
                     subprocess.run([
                         "ffmpeg", "-y",
                         "-i", temp_path,
-                        "-vf", f"subtitles={srt_path}:force_style='FontSize={sub_font_size}'",
+                        "-vf", f"subtitles='{srt_esc}':force_style='FontName={FONT_NAME},FontSize={sub_font_size}':fontsdir='{font_dir}'",
                         "-c:v", "libx264",
                         "-crf", "18",
                         "-preset", "medium",
