@@ -589,4 +589,6 @@ if video_file is not None:
                     st.text_area("📝 SRT", f.read(), height=150)
 
         # ===== Render =====
-        with st.spinner("🎬 Recap Vid
+with st.spinner("🎬 Recap Video Render..."):
+    final_path = "final_recap.mp4"
+    temp_path = "temp_recap.mp4"
