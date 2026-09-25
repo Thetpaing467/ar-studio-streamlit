@@ -208,25 +208,6 @@ video_file = st.file_uploader(
 # ============================================================
 st.header("🚀 Step 4: Generate Recap")
 
-# Video Speed Setting
-st.sidebar.header("⚡ Video Speed Setting")
-speed_mode = st.sidebar.radio(
-    "Speed Mode",
-    ["Auto (Audio ကို Video နဲ့ ကိုက်)", "Manual"],
-    index=0
-)
-
-if speed_mode == "Manual":
-    manual_speed = st.sidebar.slider(
-        "Speed Ratio",
-        min_value=0.5,
-        max_value=2.0,
-        value=1.0,
-        step=0.05
-    )
-else:
-    manual_speed = None
-
 if st.button("✨ Generate Recap Video", type="primary"):
     if not script.strip():
         st.error("❌ Script paste ပါ — Step 2")
@@ -271,43 +252,33 @@ if st.button("✨ Generate Recap Video", type="primary"):
         st.stop()
 
     # ============================================================
-    # 🆕 Speed Ratio — Auto / Manual
+    # 🆕 Audio Speed — Video အရှည် ကိုက် (Video — မထိ)
     # ============================================================
-    if manual_speed is not None:
-        # Manual
-        speed_ratio = manual_speed
-        st.write(f"⚡ Manual Speed: {speed_ratio:.2f}x")
-    else:
-        # Auto — Video / Audio
-        speed_ratio = video_duration / audio_dur
-        speed_ratio = max(0.5, min(2.0, speed_ratio))
-        st.write(f"⚡ Auto Speed: {speed_ratio:.2f}x (Video {video_duration:.1f}s / Audio {audio_dur:.1f}s)")
+    tempo = audio_dur / video_duration  # Audio Speed
+
+    # atempo — 0.5 to 2.0 — ကန့်သတ်
+    if tempo < 0.5:
+        tempo = 0.5
+    elif tempo > 2.0:
+        tempo = 2.0
+
+    st.write(f"⚡ Audio Speed: {tempo:.2f}x (Video {video_duration:.1f}s / Audio {audio_dur:.1f}s)")
 
     # ============================================================
-    # Render — Video Speed + Audio
+    # Render — Video + Audio (Audio Speed Only)
     # ============================================================
     with st.spinner("🎬 Recap Video Render..."):
         final_path = "final_recap.mp4"
 
-        # Video PTS — Speed ညှိ
-        video_pts = 1.0 / speed_ratio
-
-        # Audio Tempo — Speed ညှိ
-        atempo = speed_ratio
-
-        # FFmpeg Input
+        # Video — မထိ
         input_video = ffmpeg.input(video_filename)
-        input_audio = ffmpeg.input(audio_path)
 
-        # Video Speed Filter
-        video = input_video.video.filter('setpts', f'{video_pts}*PTS')
+        # Audio — Speed ညှိ (atempo)
+        input_audio = ffmpeg.input(audio_path).audio.filter('atempo', tempo)
 
-        # Audio Speed Filter
-        audio = input_audio.audio.filter('atempo', atempo)
-
-        # Output
+        # FFmpeg Output
         stream = ffmpeg.output(
-            video, audio, final_path,
+            input_video.video, input_audio, final_path,
             vcodec='libx264',
             crf=18,
             preset='medium',
