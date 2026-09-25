@@ -6,7 +6,7 @@ import ffmpeg
 import shutil
 import subprocess
 import sys
-from google import genai
+
 from gradio_client import Client, handle_file
 
 # ============================================================
