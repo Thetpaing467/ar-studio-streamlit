@@ -1,5 +1,0 @@
-streamlit
-google-genai
-gradio_client
-ffmpeg-python
-PyQt5
