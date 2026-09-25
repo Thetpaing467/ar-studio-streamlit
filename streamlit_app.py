@@ -5,14 +5,11 @@ import time
 import ffmpeg
 import shutil
 import subprocess
-import sys
-
 from gradio_client import Client, handle_file
 
 # ============================================================
 # Config
 # ============================================================
-LANGUAGE = "Myanmar"
 VOXCPM_PRIMARY = "openbmb/VoxCPM-Demo"
 VOXCPM_FALLBACK = "hgghfhjfhjguyjf/Voxcpm-Burmese-Tts"
 PASSWORD = "voxcpm2026"
@@ -139,78 +136,35 @@ def run_tts_chunked(text, output_path, ref_audio_path=None, progress_callback=No
 # ============================================================
 st.set_page_config(page_title="🎬 VoxCPM2 Movie Recap", page_icon="🎬")
 st.title("🎬 VoxCPM2 Movie Recap")
-st.write("ဗီဒီယို ကြည့်ပြီး Script ရယူပါ — VoxCPM2 အသံနဲ့ Recap ဖန်တီးပါ")
+st.write("Gemini Web မှ Script ရယူပြီး VoxCPM2 အသံနဲ့ Recap ဖန်တီးပါ")
 
 # ============================================================
-# 🆕 Step 1: Puter.js — Video → Script
+# 🆕 Step 1: Gemini Web — Script Manual
 # ============================================================
-st.header("📹 Step 1: Video Upload → Script")
-st.caption("⚠️ Puter.js — API Key မလို — Video ကြည့်ပြီး Script ရေးမယ်")
+st.header("📝 Step 1: Gemini Web → Script")
 
-puter_html = """
-<script src="https://js.puter.com/v2/"></script>
-<style>
-    body { font-family: sans-serif; background: #0e1117; color: white; padding: 10px; }
-    input[type="file"] { color: white; margin: 10px 0; }
-    button { background: #ff4b4b; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; }
-    button:hover { background: #e63939; }
-    #status { margin-top: 10px; color: #00ff00; }
-</style>
+st.info(
+    "**အဆင့် ၁:** [gemini.google.com](https://gemini.google.com) ဖွင့် → "
+    "Video Upload → Prompt ပေး → Script ရ → Copy"
+)
 
-<input type="file" id="videoInput" accept="video/*" />
-<button onclick="uploadAndAnalyze()">🎬 Generate Script</button>
-<div id="status"></div>
+with st.expander("📋 Prompt (Copy → Gemini Web)", expanded=True):
+    st.code(
+        "Watch this video carefully and write a clear, continuous movie recap script "
+        "in Myanmar language for audio narration that matches the length of the video. "
+        "Return plain speech text only without markdown titles.",
+        language="text"
+    )
 
-<script>
-async function uploadAndAnalyze() {
-    const input = document.getElementById('videoInput');
-    const status = document.getElementById('status');
-    
-    if (!input.files || input.files.length === 0) {
-        status.innerText = "⚠️ Video ရွေးပါ";
-        status.style.color = "orange";
-        return;
-    }
-    
-    try {
-        status.innerText = "📤 Uploading...";
-        status.style.color = "cyan";
-        
-        const file = await puter.fs.upload(input.files, 'videos');
-        const url = await puter.fs.getReadURL(file.path, '1h');
-        
-        status.innerText = "🎬 AI Analyzing...";
-        
-        const script = await puter.ai.chat(
-            `Watch this video carefully and write a clear, continuous movie recap script in Burmese language. Return ONLY the Burmese script text, no markdown, no explanations.`,
-            url,
-            { model: 'google/gemini-3.5-flash' }
-        );
-        
-        window.parent.postMessage({
-            type: 'puter_script',
-            data: script
-        }, '*');
-        
-        status.innerText = "✅ Script — ရပြီ (အောက်မှာ ကူးထည့်ပါ)";
-        
-    } catch (e) {
-        status.innerText = "❌ Error: " + e.message;
-        status.style.color = "red";
-    }
-}
-</script>
-"""
-
-# Puter.js Embed
-st.components.v1.html(puter_html, height=200)
+st.markdown("**Gemini Web လင့်:** [gemini.google.com](https://gemini.google.com)")
 
 # ============================================================
 # 🆕 Step 2: Script Paste
 # ============================================================
 st.header("📝 Step 2: Script Paste")
+
 script = st.text_area(
-    "Script (Puter.js မှ ရလာတာ — Copy → Paste ဒီမှာ)",
+    "Script (Gemini Web မှ Copy → Paste ဒီမှာ)",
     height=250,
     placeholder="မြန်မာ Script ဒီမှာ paste ပါ..."
 )
