@@ -8,10 +8,21 @@ import subprocess
 from gradio_client import Client, handle_file
 
 # ============================================================
-# Config
+# Config — Multi-Fallback Spaces
 # ============================================================
-VOXCPM_PRIMARY = "openbmb/VoxCPM-Demo"
-VOXCPM_FALLBACK = "hgghfhjfhjguyjf/Voxcpm-Burmese-Tts"
+VOXCPM_SPACES = [
+    {
+        "name": "Primary — VoxCPM Demo",
+        "space": "openbmb/VoxCPM-Demo",
+        "type": "demo",
+    },
+    {
+        "name": "Fallback — Burmese TTS",
+        "space": "hgghfhjfhjguyjf/Voxcpm-Burmese-Tts",
+        "type": "burmese",
+    },
+]
+
 PASSWORD = "voxcpm2026"
 
 # ============================================================
@@ -57,10 +68,11 @@ def split_script(text, max_chars=400):
 
 
 # ============================================================
-# TTS — Primary
+# TTS — Demo Type
 # ============================================================
-def tts_primary(chunks, ref_audio_path, progress_callback=None):
-    client = Client(VOXCPM_PRIMARY)
+def tts_demo(chunks, ref_audio_path, space, progress_callback=None):
+    """VoxCPM Demo — text_input, /generate"""
+    client = Client(space)
     audio_files = []
     ref_file = handle_file(ref_audio_path) if ref_audio_path else None
     for i, chunk in enumerate(chunks):
@@ -78,20 +90,21 @@ def tts_primary(chunks, ref_audio_path, progress_callback=None):
             api_name="/generate",
         )
         audio_path = result[0] if isinstance(result, (tuple, list)) else result
-        chunk_path = f"chunk_primary_{i}.wav"
+        chunk_path = f"chunk_demo_{i}.wav"
         shutil.copy(audio_path, chunk_path)
         audio_files.append(chunk_path)
     return audio_files
 
 
 # ============================================================
-# TTS — Fallback
+# TTS — Burmese Type
 # ============================================================
-def tts_fallback(chunks, ref_audio_path, progress_callback=None):
-    client = Client(VOXCPM_FALLBACK)
+def tts_burmese(chunks, ref_audio_path, space, progress_callback=None):
+    """Burmese TTS — target_text, /tts"""
+    client = Client(space)
     audio_files = []
     if not ref_audio_path:
-        raise Exception("Fallback — Reference Audio လိုတယ်")
+        raise Exception(f"{space} — Reference Audio လိုတယ်")
     ref_file = handle_file(ref_audio_path)
     for i, chunk in enumerate(chunks):
         if progress_callback:
@@ -105,31 +118,47 @@ def tts_fallback(chunks, ref_audio_path, progress_callback=None):
             api_name="/tts"
         )
         audio_path = result[0] if isinstance(result, (tuple, list)) else result
-        chunk_path = f"chunk_fallback_{i}.wav"
+        chunk_path = f"chunk_burmese_{i}.wav"
         shutil.copy(audio_path, chunk_path)
         audio_files.append(chunk_path)
     return audio_files
 
 
 # ============================================================
-# TTS — Run (Primary + Fallback)
+# TTS — Run (Multi-Fallback)
 # ============================================================
 def run_tts_chunked(text, output_path, ref_audio_path=None, progress_callback=None):
+    """Multi-Fallback — Try Each Space"""
     chunks = split_script(text, max_chars=400)
     audio_files = None
-    try:
-        st.info("🎙️ Primary Space...")
-        audio_files = tts_primary(chunks, ref_audio_path, progress_callback)
-        st.success("✅ Primary — အောင်မြင်")
-    except Exception as e:
-        st.warning(f"⚠️ Primary fail: {str(e)[:150]}")
-        st.info("🔄 Fallback Space...")
-        try:
-            audio_files = tts_fallback(chunks, ref_audio_path, progress_callback)
-            st.success("✅ Fallback — အောင်မြင်")
-        except Exception as e2:
-            raise Exception(f"Primary + Fallback fail:\n{e}\n---\n{e2}")
+    last_error = None
 
+    for space_info in VOXCPM_SPACES:
+        space = space_info["space"]
+        name = space_info["name"]
+        space_type = space_info["type"]
+
+        try:
+            st.info(f"🎙️ {name}...")
+
+            if space_type == "demo":
+                audio_files = tts_demo(chunks, ref_audio_path, space, progress_callback)
+            else:
+                audio_files = tts_burmese(chunks, ref_audio_path, space, progress_callback)
+
+            st.success(f"✅ {name} — အောင်မြင်")
+            break
+
+        except Exception as e:
+            last_error = str(e)
+            st.warning(f"⚠️ {name} — Fail: {last_error[:120]}")
+            audio_files = None
+            continue
+
+    if audio_files is None:
+        raise Exception(f"❌ Space အားလုံး — Fail\nLast error: {last_error}")
+
+    # Concat
     with open("concat_list.txt", "w", encoding="utf-8") as f:
         for audio in audio_files:
             f.write(f"file '{audio}'\n")
@@ -137,6 +166,7 @@ def run_tts_chunked(text, output_path, ref_audio_path=None, progress_callback=No
     ffmpeg.input("concat_list.txt", format="concat", safe=0).output(
         output_path, acodec="libmp3lame", audio_bitrate="192k", ar=48000
     ).run(overwrite_output=True)
+
     return output_path
 
 
@@ -204,6 +234,14 @@ video_file = st.file_uploader(
 )
 
 # ============================================================
+# Sidebar — Spaces Info
+# ============================================================
+st.sidebar.header("🎙️ TTS Spaces (Multi-Fallback)")
+for i, s in enumerate(VOXCPM_SPACES, 1):
+    st.sidebar.write(f"**{i}.** `{s['space']}`")
+st.sidebar.caption("Primary Busy → Auto Fallback")
+
+# ============================================================
 # Step 4: Generate Recap
 # ============================================================
 st.header("🚀 Step 4: Generate Recap")
@@ -225,7 +263,7 @@ if st.button("✨ Generate Recap Video", type="primary"):
         video_duration = float(probe['format']['duration'])
         st.write(f"📹 Video အရှည်: {video_duration:.2f} စက္ကန့်")
 
-    # ===== TTS =====
+    # ===== TTS — Multi-Fallback =====
     st.write("🎙️ VoxCPM2 → အသံ...")
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -252,11 +290,10 @@ if st.button("✨ Generate Recap Video", type="primary"):
         st.stop()
 
     # ============================================================
-    # 🆕 Audio Speed — Video အရှည် ကိုက် (Video — မထိ)
+    # Audio Speed — Video အရှည် ကိုက် (Video — မထိ)
     # ============================================================
-    tempo = audio_dur / video_duration  # Audio Speed
+    tempo = audio_dur / video_duration
 
-    # atempo — 0.5 to 2.0 — ကန့်သတ်
     if tempo < 0.5:
         tempo = 0.5
     elif tempo > 2.0:
