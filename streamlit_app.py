@@ -32,7 +32,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ============================================================
-# TTS — Primary + Fallback
+# TTS — Split Script
 # ============================================================
 def split_script(text, max_chars=400):
     sentences = text.replace("။", "။|").split("|")
@@ -56,6 +56,9 @@ def split_script(text, max_chars=400):
     return chunks
 
 
+# ============================================================
+# TTS — Primary
+# ============================================================
 def tts_primary(chunks, ref_audio_path, progress_callback=None):
     client = Client(VOXCPM_PRIMARY)
     audio_files = []
@@ -81,6 +84,9 @@ def tts_primary(chunks, ref_audio_path, progress_callback=None):
     return audio_files
 
 
+# ============================================================
+# TTS — Fallback
+# ============================================================
 def tts_fallback(chunks, ref_audio_path, progress_callback=None):
     client = Client(VOXCPM_FALLBACK)
     audio_files = []
@@ -105,6 +111,9 @@ def tts_fallback(chunks, ref_audio_path, progress_callback=None):
     return audio_files
 
 
+# ============================================================
+# TTS — Run (Primary + Fallback)
+# ============================================================
 def run_tts_chunked(text, output_path, ref_audio_path=None, progress_callback=None):
     chunks = split_script(text, max_chars=400)
     audio_files = None
@@ -139,7 +148,7 @@ st.title("🎬 VoxCPM2 Movie Recap")
 st.write("Gemini Web မှ Script ရယူပြီး VoxCPM2 အသံနဲ့ Recap ဖန်တီးပါ")
 
 # ============================================================
-# 🆕 Step 1: Gemini Web — Script Manual
+# Step 1: Gemini Web — Script
 # ============================================================
 st.header("📝 Step 1: Gemini Web → Script")
 
@@ -159,7 +168,7 @@ with st.expander("📋 Prompt (Copy → Gemini Web)", expanded=True):
 st.markdown("**Gemini Web လင့်:** [gemini.google.com](https://gemini.google.com)")
 
 # ============================================================
-# 🆕 Step 2: Script Paste
+# Step 2: Script Paste
 # ============================================================
 st.header("📝 Step 2: Script Paste")
 
@@ -170,7 +179,7 @@ script = st.text_area(
 )
 
 # ============================================================
-# 🆕 Step 3: Reference Audio + Video Upload
+# Step 3: Reference Audio + Video
 # ============================================================
 st.header("🎙️ Step 3: Reference Audio + Video")
 
@@ -195,9 +204,28 @@ video_file = st.file_uploader(
 )
 
 # ============================================================
-# 🆕 Step 4: Generate Recap
+# Step 4: Generate Recap
 # ============================================================
 st.header("🚀 Step 4: Generate Recap")
+
+# Video Speed Setting
+st.sidebar.header("⚡ Video Speed Setting")
+speed_mode = st.sidebar.radio(
+    "Speed Mode",
+    ["Auto (Audio ကို Video နဲ့ ကိုက်)", "Manual"],
+    index=0
+)
+
+if speed_mode == "Manual":
+    manual_speed = st.sidebar.slider(
+        "Speed Ratio",
+        min_value=0.5,
+        max_value=2.0,
+        value=1.0,
+        step=0.05
+    )
+else:
+    manual_speed = None
 
 if st.button("✨ Generate Recap Video", type="primary"):
     if not script.strip():
@@ -207,16 +235,16 @@ if st.button("✨ Generate Recap Video", type="primary"):
         st.error("❌ Video Upload — Step 3")
         st.stop()
 
-    # Video Save
+    # ===== Video Save =====
     with st.spinner("📹 ဗီဒီယို စစ်ဆေးနေသည်..."):
         video_filename = "input_video.mp4"
         with open(video_filename, "wb") as f:
             f.write(video_file.read())
         probe = ffmpeg.probe(video_filename)
         video_duration = float(probe['format']['duration'])
-        st.write(f"📹 အရှည်: {video_duration:.2f} စက္ကန့်")
+        st.write(f"📹 Video အရှည်: {video_duration:.2f} စက္ကန့်")
 
-    # TTS
+    # ===== TTS =====
     st.write("🎙️ VoxCPM2 → အသံ...")
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -234,27 +262,67 @@ if st.button("✨ Generate Recap Video", type="primary"):
             progress_callback=update_progress
         )
         st.write("✅ အသံ ထုတ်ပြီး")
+
         audio_dur = float(ffmpeg.probe(audio_path)['format']['duration'])
-        tempo = max(0.8, min(1.2, audio_dur / video_duration))
-        st.write(f"🎙️ အသံ ({audio_dur:.1f}s) | Tempo: {tempo:.2f}x")
+        st.write(f"🎙️ Audio အရှည်: {audio_dur:.1f} စက္ကန့်")
+
     except Exception as e:
         st.error(f"❌ VoxCPM2 error: {e}")
         st.stop()
 
-    # Render
+    # ============================================================
+    # 🆕 Speed Ratio — Auto / Manual
+    # ============================================================
+    if manual_speed is not None:
+        # Manual
+        speed_ratio = manual_speed
+        st.write(f"⚡ Manual Speed: {speed_ratio:.2f}x")
+    else:
+        # Auto — Video / Audio
+        speed_ratio = video_duration / audio_dur
+        speed_ratio = max(0.5, min(2.0, speed_ratio))
+        st.write(f"⚡ Auto Speed: {speed_ratio:.2f}x (Video {video_duration:.1f}s / Audio {audio_dur:.1f}s)")
+
+    # ============================================================
+    # Render — Video Speed + Audio
+    # ============================================================
     with st.spinner("🎬 Recap Video Render..."):
         final_path = "final_recap.mp4"
+
+        # Video PTS — Speed ညှိ
+        video_pts = 1.0 / speed_ratio
+
+        # Audio Tempo — Speed ညှိ
+        atempo = speed_ratio
+
+        # FFmpeg Input
         input_video = ffmpeg.input(video_filename)
-        input_audio = ffmpeg.input(audio_path).audio.filter('atempo', tempo)
+        input_audio = ffmpeg.input(audio_path)
+
+        # Video Speed Filter
+        video = input_video.video.filter('setpts', f'{video_pts}*PTS')
+
+        # Audio Speed Filter
+        audio = input_audio.audio.filter('atempo', atempo)
+
+        # Output
         stream = ffmpeg.output(
-            input_video.video, input_audio, final_path,
-            vcodec='libx264', crf=18, preset='medium',
-            acodec='aac', audio_bitrate='192k'
+            video, audio, final_path,
+            vcodec='libx264',
+            crf=18,
+            preset='medium',
+            acodec='aac',
+            audio_bitrate='192k',
+            shortest=None
         )
         ffmpeg.run(stream, overwrite_output=True)
 
+    # ===== Output =====
     st.success("✅ ပြီးပါပြီ!")
     st.video(final_path)
 
     with open(final_path, "rb") as f:
         st.download_button("📥 Recap Video Download", f, file_name="final_recap.mp4")
+
+    with st.expander("📝 Script"):
+        st.text(script)
