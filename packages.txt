@@ -1,1 +1,4 @@
 ffmpeg
+fontconfig
+wget
+
