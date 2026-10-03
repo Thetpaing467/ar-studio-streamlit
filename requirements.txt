@@ -1,5 +1,8 @@
+
 streamlit
-gradio_client
 ffmpeg-python
 opencv-python-headless
 Pillow
+edge-tts
+openai-whisper
+gradio_client
