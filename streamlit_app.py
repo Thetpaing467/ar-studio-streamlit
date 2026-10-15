@@ -43,7 +43,8 @@ EDGE_VOICES = {
 }
 EDGE_VOICE_FIXED = "male"
 
-GEMINI_MODEL = "gemini-2.0-flash"
+# ✅ Gemini 3.8 Flash
+GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI_KEY_FILE = ".gemini_key"
 
 st.set_page_config(
@@ -60,27 +61,17 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root{
-  --bg-0:#0a0a14;
-  --bg-1:#12121f;
-  --bg-2:#1a1a2e;
+  --bg-0:#0a0a14; --bg-1:#12121f;
   --surface:rgba(255,255,255,0.04);
   --surface-hi:rgba(255,255,255,0.07);
   --border:rgba(255,255,255,0.08);
   --border-hi:rgba(255,255,255,0.15);
-  --accent-1:#FF6B9D;
-  --accent-2:#C66BFF;
-  --accent-3:#6BA8FF;
-  --text:#e8e8f0;
-  --text-dim:#8888aa;
-  --text-muted:#5a5a7a;
-  --success:#4ade80;
-  --warn:#fbbf24;
-  --error:#f87171;
+  --accent-1:#FF6B9D; --accent-2:#C66BFF; --accent-3:#6BA8FF;
+  --text:#e8e8f0; --text-dim:#8888aa; --text-muted:#5a5a7a;
 }
 
 html, body, [class*="css"]{
   font-family:'Inter','Pyidaungsu','Myanmar Text',sans-serif;
-  font-feature-settings:'cv11','ss01';
 }
 
 .stApp{
@@ -88,352 +79,136 @@ html, body, [class*="css"]{
     radial-gradient(circle at 15% 10%, rgba(198,107,255,0.10), transparent 45%),
     radial-gradient(circle at 85% 90%, rgba(107,168,255,0.10), transparent 45%),
     linear-gradient(160deg, var(--bg-0), var(--bg-1), var(--bg-0));
-  color:var(--text);
-  min-height:100vh;
+  color:var(--text); min-height:100vh;
 }
 
 #MainMenu, footer, header{visibility:hidden}
 .block-container{padding-top:2rem; padding-bottom:3rem; max-width:900px}
 
-/* ---------- Section ---------- */
-.section-head{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin:28px 0 14px;
-}
+.section-head{display:flex;align-items:center;gap:12px;margin:28px 0 14px;}
 .section-num{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  width:32px; height:32px;
-  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:10px;
   background:linear-gradient(135deg,var(--accent-2),var(--accent-3));
-  color:#fff;
-  font-weight:800;
-  font-size:0.85rem;
-  box-shadow:0 4px 12px rgba(198,107,255,0.35);
-  flex-shrink:0;
+  color:#fff;font-weight:800;font-size:0.85rem;
+  box-shadow:0 4px 12px rgba(198,107,255,0.35);flex-shrink:0;
 }
-.section-title{
-  font-size:1.15rem;
-  font-weight:700;
-  color:var(--text);
-  letter-spacing:-0.01em;
-}
-.section-desc{
-  font-size:0.82rem;
-  color:var(--text-muted);
-  margin-left:44px;
-  margin-top:-8px;
-  margin-bottom:14px;
-}
+.section-title{font-size:1.15rem;font-weight:700;color:var(--text);}
+.section-desc{font-size:0.82rem;color:var(--text-muted);
+  margin-left:44px;margin-top:-8px;margin-bottom:14px;}
 
-/* ---------- Buttons ---------- */
 .stButton>button{
   background:linear-gradient(135deg,#667eea,#764ba2)!important;
-  color:#fff!important;
-  border:none!important;
-  border-radius:12px!important;
-  padding:12px 22px!important;
-  font-weight:600!important;
-  font-size:0.95rem!important;
-  letter-spacing:0.01em!important;
+  color:#fff!important;border:none!important;border-radius:12px!important;
+  padding:12px 22px!important;font-weight:600!important;font-size:0.95rem!important;
   box-shadow:0 4px 16px rgba(102,126,234,0.28)!important;
-  transition:all 0.2s cubic-bezier(0.4,0,0.2,1)!important;
+  transition:all 0.2s ease!important;
 }
-.stButton>button:hover{
-  transform:translateY(-1px);
-  box-shadow:0 8px 24px rgba(102,126,234,0.45)!important;
-  filter:brightness(1.08);
-}
-.stButton>button:active{transform:translateY(0)}
-
+.stButton>button:hover{transform:translateY(-1px);filter:brightness(1.08);}
 .stButton>button[kind="primary"]{
   background:linear-gradient(135deg,#FF6B9D,#C66BFF,#6BA8FF)!important;
   background-size:200% 200%!important;
   animation:gradientShift 4s ease infinite!important;
-  box-shadow:0 6px 24px rgba(198,107,255,0.4)!important;
 }
 @keyframes gradientShift{
   0%,100%{background-position:0% 50%}
   50%{background-position:100% 50%}
 }
 
-/* ---------- Inputs ---------- */
-.stTextArea textarea,
-.stTextInput input{
+.stTextArea textarea,.stTextInput input{
   background:rgba(255,255,255,0.035)!important;
   border:1px solid var(--border)!important;
-  color:var(--text)!important;
-  border-radius:12px!important;
-  font-size:0.95rem!important;
-  transition:all 0.2s ease!important;
+  color:var(--text)!important;border-radius:12px!important;
+  font-size:0.95rem!important;transition:all 0.2s ease!important;
 }
-.stTextArea textarea:focus,
-.stTextInput input:focus{
+.stTextArea textarea:focus,.stTextInput input:focus{
   border-color:var(--accent-2)!important;
   box-shadow:0 0 0 3px rgba(198,107,255,0.15)!important;
-  background:rgba(255,255,255,0.05)!important;
 }
-.stTextArea textarea::placeholder,
-.stTextInput input::placeholder{
+.stTextArea textarea::placeholder,.stTextInput input::placeholder{
   color:var(--text-muted)!important;
 }
 
-/* ---------- File Uploader ---------- */
 .stFileUploader{
   background:var(--surface);
   border:1.5px dashed var(--border-hi);
-  border-radius:14px;
-  padding:14px;
-  transition:all 0.25s ease;
+  border-radius:14px;padding:14px;transition:all 0.25s ease;
 }
-.stFileUploader:hover{
-  border-color:var(--accent-3);
-  background:var(--surface-hi);
-}
-[data-testid="stFileUploaderDropzone"]{
-  background:transparent!important;
-  border:none!important;
-}
+.stFileUploader:hover{border-color:var(--accent-3);background:var(--surface-hi);}
+[data-testid="stFileUploaderDropzone"]{background:transparent!important;border:none!important;}
 
-/* ---------- Toggle ---------- */
-[data-testid="stToggle"] label{
-  color:var(--text)!important;
-  font-weight:500!important;
-}
+[data-testid="stToggle"] label{color:var(--text)!important;font-weight:500!important;}
 
-/* ---------- Slider ---------- */
 [data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"]{
   background:linear-gradient(135deg,var(--accent-2),var(--accent-3))!important;
-  border:none!important;
-  box-shadow:0 0 0 4px rgba(198,107,255,0.2)!important;
+  border:none!important;box-shadow:0 0 0 4px rgba(198,107,255,0.2)!important;
 }
 
-/* ---------- Alerts ---------- */
-.stAlert{
-  border-radius:12px!important;
-  border:none!important;
-  padding:12px 16px!important;
-  font-size:0.9rem!important;
-}
+.stAlert{border-radius:12px!important;border:none!important;
+  padding:12px 16px!important;font-size:0.9rem!important;}
 
-/* ---------- Divider ---------- */
-hr{
-  border:none!important;
-  height:1px!important;
+hr{border:none!important;height:1px!important;
   background:linear-gradient(90deg,transparent,var(--border),transparent)!important;
-  margin:28px 0!important;
-}
+  margin:28px 0!important;}
 
-/* ---------- Timer box ---------- */
 .timer-box{
   background:linear-gradient(135deg,rgba(102,126,234,0.15),rgba(118,75,162,0.15));
-  border:1px solid rgba(198,107,255,0.25);
-  border-radius:20px;
-  padding:28px;
-  text-align:center;
-  margin:20px 0;
-  position:relative;
-  overflow:hidden;
+  border:1px solid rgba(198,107,255,0.25);border-radius:20px;
+  padding:28px;text-align:center;margin:20px 0;position:relative;overflow:hidden;
 }
 .timer-box::before{
-  content:'';
-  position:absolute;
-  top:0; left:0; right:0;
-  height:2px;
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
   background:linear-gradient(90deg,var(--accent-1),var(--accent-2),var(--accent-3));
   animation:shimmer 3s linear infinite;
 }
-@keyframes shimmer{
-  0%{transform:translateX(-100%)}
-  100%{transform:translateX(100%)}
-}
-.timer-title{
-  color:var(--text-dim);
-  font-size:0.75rem;
-  font-weight:700;
-  letter-spacing:0.15em;
-  text-transform:uppercase;
-  margin-bottom:10px;
-}
-.timer-value{
-  color:#fff;
-  font-size:3.4rem;
-  font-weight:900;
-  line-height:1;
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.timer-title{color:var(--text-dim);font-size:0.75rem;font-weight:700;
+  letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px;}
+.timer-value{color:#fff;font-size:3.4rem;font-weight:900;line-height:1;
   background:linear-gradient(135deg,#fff,#c7a4ff);
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-  background-clip:text;
-}
-.timer-unit{
-  font-size:1.4rem;
-  font-weight:700;
-  margin-left:8px;
-  -webkit-text-fill-color:var(--text-dim);
-}
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.timer-unit{font-size:1.4rem;font-weight:700;margin-left:8px;
+  -webkit-text-fill-color:var(--text-dim);}
 
-/* ---------- Step chip ---------- */
-.step-chip{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-left:3px solid var(--accent-3);
-  border-radius:10px;
-  padding:12px 18px;
-  margin:8px 0;
-  font-size:0.9rem;
-  color:var(--text);
-}
-.step-chip b{
-  color:var(--accent-3);
-  font-size:1rem;
-  font-weight:700;
-  font-variant-numeric:tabular-nums;
-}
+.step-chip{display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface);border:1px solid var(--border);
+  border-left:3px solid var(--accent-3);border-radius:10px;
+  padding:12px 18px;margin:8px 0;font-size:0.9rem;color:var(--text);}
+.step-chip b{color:var(--accent-3);font-size:1rem;font-weight:700;
+  font-variant-numeric:tabular-nums;}
 
-/* ---------- Status pills ---------- */
-.status-pill{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:5px 12px;
-  border-radius:999px;
-  font-size:0.8rem;
-  font-weight:600;
-  letter-spacing:0.01em;
-}
-.status-ok{
-  background:rgba(74,222,128,0.12);
-  color:#86efac;
-  border:1px solid rgba(74,222,128,0.25);
-}
-.status-info{
-  background:rgba(107,168,255,0.12);
-  color:#a5c9ff;
-  border:1px solid rgba(107,168,255,0.25);
-}
-.status-warn{
-  background:rgba(251,191,36,0.12);
-  color:#fde68a;
-  border:1px solid rgba(251,191,36,0.25);
-}
+.status-pill{display:inline-flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:999px;font-size:0.8rem;
+  font-weight:600;letter-spacing:0.01em;}
+.status-ok{background:rgba(74,222,128,0.12);color:#86efac;
+  border:1px solid rgba(74,222,128,0.25);}
+.status-info{background:rgba(107,168,255,0.12);color:#a5c9ff;
+  border:1px solid rgba(107,168,255,0.25);}
+.status-warn{background:rgba(251,191,36,0.12);color:#fde68a;
+  border:1px solid rgba(251,191,36,0.25);}
 
-/* ---------- Paste zone ---------- */
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea{
-  background:linear-gradient(135deg,rgba(255,107,157,0.08),rgba(198,107,255,0.08))!important;
-  border:2px dashed rgba(198,107,255,0.45)!important;
-  border-radius:18px!important;
-  color:#fff!important;
-  font-size:1.02rem!important;
-  padding:22px!important;
-  text-align:center!important;
-  transition:all 0.25s ease!important;
-}
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea:hover{
-  border-color:rgba(198,107,255,0.7)!important;
-  background:linear-gradient(135deg,rgba(255,107,157,0.12),rgba(198,107,255,0.12))!important;
-}
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea:focus{
-  border-color:#C66BFF!important;
-  border-style:solid!important;
-  box-shadow:0 0 0 4px rgba(198,107,255,0.15),0 0 30px rgba(198,107,255,0.3)!important;
-}
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea::placeholder{
-  color:#b48cff!important;
-  font-weight:600!important;
-}
-
-/* ---------- Login card ---------- */
-.login-card{
-  max-width:420px;
-  margin:80px auto 20px;
-  padding:36px 32px 24px;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:24px;
-  backdrop-filter:blur(20px);
-  box-shadow:0 20px 60px rgba(0,0,0,0.4);
-  text-align:center;
-}
-.login-icon{
-  font-size:2.5rem;
-  margin-bottom:12px;
-  display:block;
-}
-.login-title{
-  font-size:1.5rem;
-  font-weight:800;
+.login-card{max-width:420px;margin:80px auto 20px;padding:36px 32px 24px;
+  background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  backdrop-filter:blur(20px);box-shadow:0 20px 60px rgba(0,0,0,0.4);text-align:center;}
+.login-icon{font-size:2.5rem;margin-bottom:12px;display:block;}
+.login-title{font-size:1.5rem;font-weight:800;
   background:linear-gradient(110deg,#FF6B9D,#C66BFF,#6BA8FF);
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-  background-clip:text;
-  margin-bottom:6px;
-}
-.login-sub{
-  color:var(--text-muted);
-  font-size:0.85rem;
-  margin-bottom:20px;
-}
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;}
+.login-sub{color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;}
 
-/* ---------- Video ---------- */
-video{
-  border-radius:14px;
-  box-shadow:0 12px 40px rgba(0,0,0,0.4);
-}
+video{border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.4);}
 
-/* ---------- Download button ---------- */
 .stDownloadButton>button{
   background:linear-gradient(135deg,#4ade80,#22c55e)!important;
-  color:#052e16!important;
-  font-weight:700!important;
-  box-shadow:0 6px 24px rgba(74,222,128,0.35)!important;
-}
-.stDownloadButton>button:hover{
-  box-shadow:0 10px 32px rgba(74,222,128,0.5)!important;
-  filter:brightness(1.05);
-}
+  color:#052e16!important;font-weight:700!important;
+  box-shadow:0 6px 24px rgba(74,222,128,0.35)!important;}
 
-/* ---------- Tabs ---------- */
-[data-testid="stTabs"] [data-baseweb="tab-list"]{
-  gap:8px;
-  background:transparent;
-  border-bottom:1px solid var(--border);
-}
-[data-testid="stTabs"] [data-baseweb="tab"]{
-  background:transparent!important;
-  border-radius:10px 10px 0 0!important;
-  padding:10px 20px!important;
-  color:var(--text-dim)!important;
-  font-weight:600!important;
-  border:none!important;
-}
-[data-testid="stTabs"] [aria-selected="true"]{
-  background:linear-gradient(135deg,rgba(198,107,255,0.15),rgba(107,168,255,0.15))!important;
-  color:#fff!important;
-  border-bottom:2px solid var(--accent-2)!important;
-}
-
-/* ---------- API Key card ---------- */
 .api-card{
   background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(107,168,255,0.08));
-  border:1px solid rgba(74,222,128,0.25);
-  border-radius:14px;
-  padding:14px 18px;
-  margin:10px 0;
-}
-.api-label{
-  font-size:0.75rem;
-  color:var(--text-dim);
-  font-weight:700;
-  letter-spacing:0.1em;
-  text-transform:uppercase;
-  margin-bottom:6px;
-}
+  border:1px solid rgba(74,222,128,0.25);border-radius:14px;
+  padding:14px 18px;margin:10px 0;}
+.api-label{font-size:0.75rem;color:var(--text-dim);font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -512,24 +287,22 @@ if not st.session_state.auth:
     st.stop()
 
 
-# ==================== Session Init (အားလုံး ကြိုတင်သတ်မှတ်) ====================
+# ==================== Session Init ====================
 if "script" not in st.session_state: st.session_state.script = ""
 if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
 if "gemini_key" not in st.session_state:
     st.session_state.gemini_key = load_saved_key()
-if "transcript_ready" not in st.session_state: st.session_state.transcript_ready = False
 if "ref" not in st.session_state: st.session_state.ref = None
 if "pkey" not in st.session_state: st.session_state.pkey = None
-if "last_paste" not in st.session_state: st.session_state.last_paste = ""
+if "transcribe_hash" not in st.session_state: st.session_state.transcribe_hash = None
+if "show_key_panel" not in st.session_state: st.session_state.show_key_panel = False
 
 
 def _on_download_clear():
     st.session_state.script = ""
-    st.session_state.last_paste = ""
-    st.session_state.paste_big = ""
     st.session_state.pkey = None
     st.session_state.video_up_key = st.session_state.get("video_up_key", 0) + 1
-    st.session_state.transcript_ready = False
+    st.session_state.transcribe_hash = None
 
 
 # ==================== Gemini Transcription ====================
@@ -1223,166 +996,82 @@ def whisper_fast(video_path, model=None):
 # (Hero section ဖျောက်ထားပါသည်)
 
 
-# ⚠️ ကြိုတင်သတ်မှတ် — Step 2 မှာ update ဖြစ်မယ်
-vid = None
+# ---------- Step 1 — Video Upload (Auto Transcribe) ----------
+section("1", "Video Upload", "Upload လုပ်တာနဲ့ Transcript Auto ထုတ်မည်")
 
-
-# ---------- Step 1 — Script ----------
-section("1", "Script Input", "Transcript ထုတ်ရန် (သို့) ကိုယ်တိုင်ရေးရန်")
-
-tab_manual, tab_api = st.tabs(["✍️  ကိုယ်တိုင်ရေး / Paste", "🎙️  API နဲ့ Transcript ထုတ်"])
-
-# ----- Tab 1: Manual -----
-with tab_manual:
-    st.markdown("""
-    <div style="text-align:center;margin:12px 0 8px">
-        <span style="font-size:0.95rem;font-weight:700;
-            background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            background-clip:text">
-            📋  Quick Paste (Auto fill)
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    pasted_now = st.text_area(
-        "paste", value="", height=80, key="paste_big",
-        label_visibility="collapsed",
-        placeholder="📋  Long-press → Paste  (or Ctrl+V)  —  Auto ဖြည့်ပေးမည်"
-    )
-
-    if pasted_now and pasted_now.strip():
-        clean = pasted_now.strip()
-        if clean != st.session_state.get("last_paste", ""):
-            st.session_state.last_paste = clean
-            lines = [l.strip().strip('"\u201c\u201d').strip() for l in clean.splitlines()]
-            result = "\n\n".join(l for l in lines if l)
-            st.session_state.script = result
-            st.session_state.paste_big = ""
-            st.rerun()
-
-# ----- Tab 2: Gemini API -----
-with tab_api:
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-    # API Key status
-    if st.session_state.gemini_key:
-        masked = st.session_state.gemini_key[:6] + "•" * 20 + st.session_state.gemini_key[-4:]
-        st.markdown(f"""
-        <div class="api-card">
-            <div class="api-label">🔑  Gemini API Key — Saved</div>
-            <div style="font-family:monospace;font-size:0.9rem;color:#86efac;
-                letter-spacing:0.05em;">{masked}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        c1, c2 = st.columns([3, 1])
-        with c2:
-            if st.button("🗑️  Key ဖျက်", use_container_width=True):
-                clear_saved_key()
-                st.session_state.gemini_key = None
-                st.rerun()
-
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    else:
-        st.info("💡  API Key တစ်ခါထည့်ပြီးရင် session တစ်ခုလုံး ပြန်ထည့်စရာ မလိုပါ")
-        key_input = st.text_input(
-            "Gemini API Key",
-            type="password",
-            placeholder="🔑  AIzaSy...",
-            label_visibility="collapsed"
+# API Key mini status + settings
+if st.session_state.gemini_key:
+    masked = st.session_state.gemini_key[:6] + "•" * 16 + st.session_state.gemini_key[-4:]
+    c1, c2, c3 = st.columns([5, 1, 1])
+    with c1:
+        st.markdown(
+            f'<div style="font-size:0.82rem;color:#86efac;padding-top:8px;">'
+            f'🔑  Gemini 3.8 Flash — <span style="font-family:monospace;">{masked}</span></div>',
+            unsafe_allow_html=True
         )
-        if key_input and st.button("💾  Key သိမ်း", use_container_width=True):
-            if len(key_input.strip()) > 20:
-                save_key(key_input.strip())
-                st.session_state.gemini_key = key_input.strip()
-                st.success("✅ Key သိမ်းပြီးပါပြီ")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.error("❌ Key ပုံစံ မမှန်ပါ")
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-    # Language selector
-    lang_choice = st.radio(
-        "Transcript ဘာသာစကား",
-        ["မြန်မာ", "English", "Auto detect"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
-    lang_code = lang_map[lang_choice]
-
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-    # Generate button
-    can_transcribe = vid is not None and st.session_state.gemini_key
-    if st.button(
-        "🎙️  Video ကနေ Transcript ထုတ်",
-        type="primary",
-        use_container_width=True,
-        disabled=not can_transcribe,
-    ):
-        if vid is None:
-            st.error("📹  အပေါ်မှာ Video Upload လုပ်ပါ")
-        else:
-            with st.spinner("🎙️  Gemini နဲ့ Transcript ထုတ်နေသည်..."):
-                try:
-                    vid.seek(0)
-                    with open("input_transcribe.mp4", "wb") as f:
-                        f.write(vid.read())
-
-                    result = transcribe_with_gemini(
-                        "input_transcribe.mp4",
-                        st.session_state.gemini_key,
-                        lang_code
-                    )
-
-                    if result:
-                        st.session_state.script = result
-                        st.session_state.transcript_ready = True
-                        st.success(f"✅  Transcript ရပါပြီ — {len(result):,} လုံး")
-                        time.sleep(0.8)
-                        st.rerun()
-                    else:
-                        st.error("❌  Transcript မရပါ")
-                except Exception as e:
-                    st.error(f"❌  {str(e)[:250]}")
-
-    if not can_transcribe:
-        st.caption("📹  Step 2 (အောက်မှာ) Video Upload လုပ်ပြီးမှ Transcript ထုတ်နိုင်မည်")
-
-st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-# Script area
-script = st.text_area(
-    "Script", value=st.session_state.script, height=200,
-    label_visibility="collapsed",
-    placeholder="✍️  မြန်မာ Script ဒီနေရာမှာ ရေးပါ (သို့) Paste လုပ်ပါ..."
-)
-st.session_state.script = script
-
-c1, c2 = st.columns([3, 1])
-with c1:
-    st.caption(f"📝  {len(script):,} characters")
-with c2:
-    if st.button("🗑️  Clear", use_container_width=True):
-        st.session_state.script = ""
-        st.session_state.last_paste = ""
-        st.session_state.transcript_ready = False
+    with c2:
+        if st.button("⚙️", use_container_width=True, help="API Key Settings"):
+            st.session_state.show_key_panel = not st.session_state.show_key_panel
+            st.rerun()
+    with c3:
+        if st.button("🗑️", use_container_width=True, help="Key ဖျက်"):
+            clear_saved_key()
+            st.session_state.gemini_key = None
+            st.rerun()
+else:
+    status("API Key မရှိပါ — ⚙️ နှိပ်ပြီး ထည့်ပါ (Auto-transcribe အတွက်)", "warn")
+    if st.button("🔑  API Key ထည့်", use_container_width=True):
+        st.session_state.show_key_panel = True
         st.rerun()
 
-st.divider()
+# Key input panel
+if st.session_state.show_key_panel or not st.session_state.gemini_key:
+    with st.container():
+        st.markdown("""
+        <div class="api-card">
+            <div class="api-label">🔑  Gemini API Key</div>
+        </div>
+        """, unsafe_allow_html=True)
+        kc1, kc2 = st.columns([4, 1])
+        with kc1:
+            new_key = st.text_input(
+                "Gemini API Key",
+                type="password",
+                placeholder="🔑  AIzaSy...",
+                label_visibility="collapsed",
+                key="new_key_input"
+            )
+        with kc2:
+            if st.button("💾  သိမ်း", use_container_width=True):
+                if new_key and len(new_key.strip()) > 20:
+                    save_key(new_key.strip())
+                    st.session_state.gemini_key = new_key.strip()
+                    st.session_state.show_key_panel = False
+                    st.success("✅ Key သိမ်းပြီးပါပြီ")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Key မမှန်ပါ")
 
+# Language
+lang_choice = st.radio(
+    "Transcript ဘာသာစကား",
+    ["မြန်မာ", "English", "Auto detect"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
+lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
+lang_code = lang_map[lang_choice]
 
-# ---------- Step 2 — Video Upload ----------
-section("2", "Video Upload", "MP4 / MOV / AVI / MKV")
+st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
+# Video upload
 vid = st.file_uploader(
     "Video", type=["mp4", "mov", "avi", "mkv"],
     label_visibility="collapsed",
     key=f"video_up_{st.session_state.video_up_key}"
 )
+
 if vid:
     status(f"{vid.size/(1024*1024):.1f} MB  —  {vid.name}", "ok")
 
@@ -1394,6 +1083,80 @@ use_neon = True
 neon_animated = True
 neon_thickness = 15
 neon_speed = 0.4
+
+
+# ---------- Step 2 — Script (Auto filled) ----------
+section("2", "Script", "Auto transcript (edit လုပ်လို့ရ)")
+
+# ✅ Auto transcribe — video upload လုပ်ပြီး script မရှိသေးရင်
+if vid is not None:
+    vid.seek(0)
+    vid_bytes = vid.read()
+    vid_hash = hashlib.md5(vid_bytes).hexdigest()
+    vid.seek(0)
+
+    if (st.session_state.transcribe_hash != vid_hash
+        and not st.session_state.script.strip()):
+
+        if not st.session_state.gemini_key:
+            st.warning("⚠️  Auto transcript အတွက် API Key ထည့်ပါ (အပေါ်မှာ ⚙️)")
+        else:
+            with st.spinner("🎙️  Gemini 3.8 Flash နဲ့ Transcript ထုတ်နေသည်..."):
+                try:
+                    with open("input_transcribe.mp4", "wb") as f:
+                        f.write(vid_bytes)
+
+                    result = transcribe_with_gemini(
+                        "input_transcribe.mp4",
+                        st.session_state.gemini_key,
+                        lang_code
+                    )
+
+                    if result:
+                        st.session_state.script = result
+                        st.session_state.transcribe_hash = vid_hash
+                        st.success(f"✅  Transcript ရပါပြီ — {len(result):,} လုံး")
+                        time.sleep(0.6)
+                        st.rerun()
+                    else:
+                        st.error("❌  Transcript မရပါ")
+                        st.session_state.transcribe_hash = vid_hash
+                except Exception as e:
+                    st.error(f"❌  {str(e)[:250]}")
+                    st.session_state.transcribe_hash = vid_hash
+
+    # Re-transcribe button
+    if st.session_state.transcribe_hash == vid_hash and st.session_state.script.strip():
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            status("Transcript ready — edit လုပ်နိုင်သည်", "ok")
+        with c2:
+            if st.button("🔄  ပြန်ထုတ်", use_container_width=True):
+                st.session_state.script = ""
+                st.session_state.transcribe_hash = None
+                st.rerun()
+
+# Script textarea (တစ်ခုပဲ)
+script = st.text_area(
+    "Script",
+    value=st.session_state.script,
+    height=220,
+    label_visibility="collapsed",
+    placeholder="✍️  Video upload လုပ်တာနဲ့ Auto ဖြည့်ပေးမည်...\n"
+                "သို့မဟုတ် ဒီနေရာမှာ ကိုယ်တိုင်ရေးပါ"
+)
+st.session_state.script = script
+
+c1, c2 = st.columns([3, 1])
+with c1:
+    st.caption(f"📝  {len(script):,} characters")
+with c2:
+    if st.button("🗑️  Clear", use_container_width=True):
+        st.session_state.script = ""
+        st.session_state.transcribe_hash = None
+        st.rerun()
+
+st.divider()
 
 
 # ---------- Step 3 — Subtitle ----------
