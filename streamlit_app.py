@@ -38,7 +38,7 @@ CORNER_RADIUS = 20
 EDGE_VOICES = {"female": "my-MM-NilarNeural", "male": "my-MM-ThihaNeural"}
 EDGE_VOICE_FIXED = "male"
 
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_KEY_FILE = ".gemini_key"
 
 st.set_page_config(page_title="Myanmar TTS Recap", page_icon="🎬",
@@ -143,6 +143,21 @@ video{border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.4);}
   padding:14px 18px;margin:10px 0;}
 .api-label{font-size:0.75rem;color:var(--text-dim);font-weight:700;
   letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
+
+/* Canvas paste box */
+div[data-testid="stTextArea"]:has(textarea[aria-label="canvas_paste"]) textarea{
+  background:linear-gradient(135deg,rgba(255,107,157,0.08),rgba(198,107,255,0.08))!important;
+  border:2px dashed rgba(198,107,255,0.45)!important;
+  border-radius:18px!important;color:#fff!important;
+  font-size:1.02rem!important;padding:22px!important;
+  text-align:center!important;transition:all 0.25s ease!important;}
+div[data-testid="stTextArea"]:has(textarea[aria-label="canvas_paste"]) textarea:hover{
+  border-color:rgba(198,107,255,0.7)!important;}
+div[data-testid="stTextArea"]:has(textarea[aria-label="canvas_paste"]) textarea:focus{
+  border-color:#C66BFF!important;border-style:solid!important;
+  box-shadow:0 0 0 4px rgba(198,107,255,0.15),0 0 30px rgba(198,107,255,0.3)!important;}
+div[data-testid="stTextArea"]:has(textarea[aria-label="canvas_paste"]) textarea::placeholder{
+  color:#b48cff!important;font-weight:600!important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -223,6 +238,9 @@ _defaults = {
     "api_lang": "my",
     "auto_transcribe_done": False,
     "last_video_name": None,
+    "transcript_mode": "api",   # "api" or "canvas"
+    "last_paste": "",
+    "paste_big": "",
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -236,6 +254,8 @@ def _on_download_clear():
     st.session_state.transcribe_hash = None
     st.session_state.auto_transcribe_done = False
     st.session_state.last_video_name = None
+    st.session_state.last_paste = ""
+    st.session_state.paste_big = ""
 
 
 # ==================== Gemini Transcription ====================
@@ -799,63 +819,76 @@ def whisper_fast(video_path, model=None):
 # (Hero section ဖျောက်ထားပါသည်)
 
 # ---------- Step 1 — Video Upload ----------
-section("1", "Video Upload", "Upload လုပ်တာနဲ့ Transcript Auto ထုတ်မည်")
+section("1", "Video Upload", "Upload လုပ်ပြီး Transcript ထုတ်မည်")
 
-# API Key bar
-if st.session_state.gemini_key:
-    masked = st.session_state.gemini_key[:6] + "•" * 16 + st.session_state.gemini_key[-4:]
-    c1, c2, c3 = st.columns([5, 1, 1])
-    with c1:
-        st.markdown(
-            f'<div style="font-size:0.82rem;color:#86efac;padding-top:8px;">'
-            f'🔑  Gemini 3.8 Flash — <span style="font-family:monospace;">{masked}</span></div>',
-            unsafe_allow_html=True)
-    with c2:
-        if st.button("⚙️", use_container_width=True, help="API Key Settings"):
-            st.session_state.show_key_panel = not st.session_state.show_key_panel
-            st.rerun()
-    with c3:
-        if st.button("🗑️", use_container_width=True, help="Key ဖျက်"):
-            clear_saved_key()
-            st.session_state.gemini_key = None
-            st.rerun()
-else:
-    status("API Key မရှိပါ — ⚙️ နှိပ်ပြီး ထည့်ပါ (Auto-transcribe အတွက်)", "warn")
-    if st.button("🔑  API Key ထည့်", use_container_width=True):
-        st.session_state.show_key_panel = True
-        st.rerun()
+# 📄 Transcript Mode Selector
+mode_choice = st.radio(
+    "Transcript နည်းလမ်း",
+    ["🎙️ API Auto (Gemini 3.6 Flash)", "📄 Canvas Manual (Link + Paste)"],
+    horizontal=False,
+    label_visibility="collapsed"
+)
+st.session_state.transcript_mode = "api" if "API" in mode_choice else "canvas"
 
-# Key input panel
-if st.session_state.show_key_panel or not st.session_state.gemini_key:
-    st.markdown("""
-    <div class="api-card">
-        <div class="api-label">🔑  Gemini API Key</div>
-    </div>
-    """, unsafe_allow_html=True)
-    kc1, kc2 = st.columns([4, 1])
-    with kc1:
-        new_key = st.text_input("Gemini API Key", type="password",
-                                placeholder="🔑  AIzaSy...",
-                                label_visibility="collapsed",
-                                key="new_key_input")
-    with kc2:
-        if st.button("💾  သိမ်း", use_container_width=True):
-            if new_key and len(new_key.strip()) > 20:
-                save_key(new_key.strip())
-                st.session_state.gemini_key = new_key.strip()
-                st.session_state.show_key_panel = False
-                st.success("✅ Key သိမ်းပြီးပါပြီ")
-                time.sleep(0.5)
+st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+# API Key bar — API mode ဆိုရင်ပဲ ပြ
+if st.session_state.transcript_mode == "api":
+    if st.session_state.gemini_key:
+        masked = st.session_state.gemini_key[:6] + "•" * 16 + st.session_state.gemini_key[-4:]
+        c1, c2, c3 = st.columns([5, 1, 1])
+        with c1:
+            st.markdown(
+                f'<div style="font-size:0.82rem;color:#86efac;padding-top:8px;">'
+                f'🔑  Gemini 3.6 Flash — <span style="font-family:monospace;">{masked}</span></div>',
+                unsafe_allow_html=True)
+        with c2:
+            if st.button("⚙️", use_container_width=True, help="API Key Settings"):
+                st.session_state.show_key_panel = not st.session_state.show_key_panel
                 st.rerun()
-            else:
-                st.error("❌ Key မမှန်ပါ")
+        with c3:
+            if st.button("🗑️", use_container_width=True, help="Key ဖျက်"):
+                clear_saved_key()
+                st.session_state.gemini_key = None
+                st.rerun()
+    else:
+        status("API Key မရှိပါ — ⚙️ နှိပ်ပြီး ထည့်ပါ", "warn")
+        if st.button("🔑  API Key ထည့်", use_container_width=True):
+            st.session_state.show_key_panel = True
+            st.rerun()
 
-# Language
-lang_choice = st.radio("Transcript ဘာသာစကား",
-    ["မြန်မာ", "English", "Auto detect"], horizontal=True,
-    label_visibility="collapsed")
-lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
-lang_code = lang_map[lang_choice]
+    if st.session_state.show_key_panel or not st.session_state.gemini_key:
+        st.markdown("""
+        <div class="api-card">
+            <div class="api-label">🔑  Gemini API Key</div>
+        </div>
+        """, unsafe_allow_html=True)
+        kc1, kc2 = st.columns([4, 1])
+        with kc1:
+            new_key = st.text_input("Gemini API Key", type="password",
+                                    placeholder="🔑  AIzaSy...",
+                                    label_visibility="collapsed",
+                                    key="new_key_input")
+        with kc2:
+            if st.button("💾  သိမ်း", use_container_width=True):
+                if new_key and len(new_key.strip()) > 20:
+                    save_key(new_key.strip())
+                    st.session_state.gemini_key = new_key.strip()
+                    st.session_state.show_key_panel = False
+                    st.success("✅ Key သိမ်းပြီးပါပြီ")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Key မမှန်ပါ")
+
+    # Language
+    lang_choice = st.radio("Transcript ဘာသာစကား",
+        ["မြန်မာ", "English", "Auto detect"], horizontal=True,
+        label_visibility="collapsed")
+    lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
+    lang_code = lang_map[lang_choice]
+else:
+    lang_code = "my"  # Canvas mode — manual
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -866,7 +899,6 @@ vid = st.file_uploader("Video", type=["mp4", "mov", "avi", "mkv"],
 
 if vid:
     status(f"{vid.size/(1024*1024):.1f} MB  —  {vid.name}", "ok")
-    # ✅ Video အသစ် upload ဖြစ်ရင် → state ကို reset
     if st.session_state.last_video_name != vid.name:
         st.session_state.last_video_name = vid.name
         st.session_state.transcribe_hash = None
@@ -880,59 +912,89 @@ neon_animated = True
 neon_thickness = 15
 neon_speed = 0.4
 
-# ---------- Step 2 — Script (Auto transcribe here) ----------
+# ---------- Step 2 — Script ----------
 section("2", "Script", "Auto transcript (edit လုပ်လို့ရ)")
 
-# ✅ AUTO-TRANSCRIBE TRIGGER
-if vid is not None and not st.session_state.auto_transcribe_done:
-    vid.seek(0)
-    vid_bytes = vid.read()
-    vid_hash = hashlib.md5(vid_bytes).hexdigest()
-    vid.seek(0)
+# ==== API Mode — Auto Transcribe ====
+if st.session_state.transcript_mode == "api":
+    if vid is not None and not st.session_state.auto_transcribe_done:
+        vid.seek(0)
+        vid_bytes = vid.read()
+        vid_hash = hashlib.md5(vid_bytes).hexdigest()
+        vid.seek(0)
 
-    if not st.session_state.gemini_key:
-        st.warning("⚠️  Auto transcript အတွက် API Key ထည့်ပါ (အပေါ်မှာ ⚙️)")
-        st.session_state.auto_transcribe_done = True
-    else:
-        with st.spinner("🎙️  Gemini 3.8 Flash နဲ့ Transcript ထုတ်နေသည်..."):
-            try:
-                with open("input_transcribe.mp4", "wb") as f:
-                    f.write(vid_bytes)
-
-                result = transcribe_with_gemini(
-                    "input_transcribe.mp4",
-                    st.session_state.gemini_key,
-                    lang_code)
-
-                if result:
-                    st.session_state.script = result
-                    st.session_state.transcribe_hash = vid_hash
+        if not st.session_state.gemini_key:
+            st.warning("⚠️  Auto transcript အတွက် API Key ထည့်ပါ")
+            st.session_state.auto_transcribe_done = True
+        else:
+            with st.spinner("🎙️  Gemini 3.6 Flash နဲ့ Transcript ထုတ်နေသည်..."):
+                try:
+                    with open("input_transcribe.mp4", "wb") as f:
+                        f.write(vid_bytes)
+                    result = transcribe_with_gemini(
+                        "input_transcribe.mp4",
+                        st.session_state.gemini_key,
+                        lang_code)
+                    if result:
+                        st.session_state.script = result
+                        st.session_state.transcribe_hash = vid_hash
+                        st.session_state.auto_transcribe_done = True
+                        st.rerun()
+                    else:
+                        st.error("❌  Transcript မရပါ")
+                        st.session_state.auto_transcribe_done = True
+                except Exception as e:
+                    st.error(f"❌  {str(e)[:250]}")
                     st.session_state.auto_transcribe_done = True
-                    st.rerun()
-                else:
-                    st.error("❌  Transcript မရပါ")
-                    st.session_state.auto_transcribe_done = True
-            except Exception as e:
-                st.error(f"❌  {str(e)[:250]}")
-                st.session_state.auto_transcribe_done = True
 
-# Status + Re-transcribe
-if vid and st.session_state.script.strip():
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        status("Transcript ready — edit လုပ်နိုင်သည်", "ok")
-    with c2:
-        if st.button("🔄  ပြန်ထုတ်", use_container_width=True):
-            st.session_state.script = ""
-            st.session_state.auto_transcribe_done = False
-            st.session_state.transcribe_hash = None
+    if vid and st.session_state.script.strip():
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            status("Transcript ready — edit လုပ်နိုင်သည်", "ok")
+        with c2:
+            if st.button("🔄  ပြန်ထုတ်", use_container_width=True):
+                st.session_state.script = ""
+                st.session_state.auto_transcribe_done = False
+                st.session_state.transcribe_hash = None
+                st.rerun()
+
+# ==== Canvas Mode — Link + Paste ====
+else:
+    st.link_button("↗️  Canvas ကို Tab အသစ်မှာ ဖွင့်", CANVAS_URL,
+                   use_container_width=True)
+    st.caption("Canvas ဖွင့် → Transcript Copy → အောက်က Box ထဲ Paste")
+
+    st.markdown("""
+    <div style="text-align:center;margin:16px 0 8px">
+        <span style="font-size:1rem;font-weight:700;
+            background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            background-clip:text">
+            📋  Quick Paste (Auto fill)
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    pasted_now = st.text_area(
+        "canvas_paste", value="", height=80, key="paste_big",
+        label_visibility="collapsed",
+        placeholder="📋  Long-press → Paste  (or Ctrl+V)  —  Auto ဖြည့်ပေးမည်"
+    )
+
+    if pasted_now and pasted_now.strip():
+        clean = pasted_now.strip()
+        if clean != st.session_state.get("last_paste", ""):
+            st.session_state.last_paste = clean
+            lines = [l.strip().strip('"\u201c\u201d').strip() for l in clean.splitlines()]
+            result = "\n\n".join(l for l in lines if l)
+            st.session_state.script = result
+            st.session_state.paste_big = ""
             st.rerun()
 
-# Script textarea
+# Script textarea (တစ်ခုပဲ — နှစ်မျိုးလုံး ဒီနေရာမှာ ပြ)
 script = st.text_area("Script", value=st.session_state.script,
     height=220, label_visibility="collapsed",
-    placeholder="✍️  Video upload လုပ်တာနဲ့ Auto ဖြည့်ပေးမည်...\n"
-                "သို့မဟုတ် ဒီနေရာမှာ ကိုယ်တိုင်ရေးပါ")
+    placeholder="✍️  Auto ဖြည့်ပေးမည်... (သို့) ဒီနေရာမှာ ကိုယ်တိုင်ရေးပါ")
 st.session_state.script = script
 
 c1, c2 = st.columns([3, 1])
@@ -943,6 +1005,7 @@ with c2:
         st.session_state.script = ""
         st.session_state.auto_transcribe_done = False
         st.session_state.transcribe_hash = None
+        st.session_state.last_paste = ""
         st.rerun()
 
 st.divider()
