@@ -43,7 +43,6 @@ EDGE_VOICES = {
 }
 EDGE_VOICE_FIXED = "male"
 
-# Gemini Transcription
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_KEY_FILE = ".gemini_key"
 
@@ -459,7 +458,6 @@ def status(text, kind="ok"):
 
 
 def load_saved_key():
-    """File ကနေ API key ပြန်ဖတ်"""
     try:
         if os.path.exists(GEMINI_KEY_FILE):
             with open(GEMINI_KEY_FILE, "r") as f:
@@ -472,7 +470,6 @@ def load_saved_key():
 
 
 def save_key(k):
-    """API key ကို file မှာ သိမ်း (session ပြတ်သွားလည်း ဆက်ရှိ)"""
     try:
         with open(GEMINI_KEY_FILE, "w") as f:
             f.write(k.strip())
@@ -515,12 +512,15 @@ if not st.session_state.auth:
     st.stop()
 
 
-# ==================== Session Init ====================
+# ==================== Session Init (အားလုံး ကြိုတင်သတ်မှတ်) ====================
 if "script" not in st.session_state: st.session_state.script = ""
 if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
 if "gemini_key" not in st.session_state:
     st.session_state.gemini_key = load_saved_key()
 if "transcript_ready" not in st.session_state: st.session_state.transcript_ready = False
+if "ref" not in st.session_state: st.session_state.ref = None
+if "pkey" not in st.session_state: st.session_state.pkey = None
+if "last_paste" not in st.session_state: st.session_state.last_paste = ""
 
 
 def _on_download_clear():
@@ -534,10 +534,8 @@ def _on_download_clear():
 
 # ==================== Gemini Transcription ====================
 def transcribe_with_gemini(video_path, api_key, language="my"):
-    """Gemini API နဲ့ video/audio ကို transcript ထုတ်"""
     import requests
 
-    # Video → audio extract (Gemini ကို size သေးသေးပို့ရ)
     audio_path = "gemini_transcribe.m4a"
     subprocess.run([
         "ffmpeg", "-y", "-i", video_path,
@@ -548,10 +546,9 @@ def transcribe_with_gemini(video_path, api_key, language="my"):
 
     size_mb = os.path.getsize(audio_path) / (1024 * 1024)
     if size_mb > 20:
-        # ကြီးရင် ဖြတ်ပစ် (Gemini inline limit)
         subprocess.run([
             "ffmpeg", "-y", "-i", audio_path,
-            "-t", "600",  # 10 min ပဲ
+            "-t", "600",
             "-c", "copy", "gemini_transcribe_cut.m4a"
         ], capture_output=True, check=True)
         audio_path = "gemini_transcribe_cut.m4a"
@@ -600,7 +597,6 @@ def transcribe_with_gemini(video_path, api_key, language="my"):
     except (KeyError, IndexError):
         raise Exception("Gemini: response format မမှန်ပါ")
 
-    # cleanup
     for p in ["gemini_transcribe.m4a", "gemini_transcribe_cut.m4a"]:
         try:
             if os.path.exists(p): os.remove(p)
@@ -1227,6 +1223,10 @@ def whisper_fast(video_path, model=None):
 # (Hero section ဖျောက်ထားပါသည်)
 
 
+# ⚠️ ကြိုတင်သတ်မှတ် — Step 2 မှာ update ဖြစ်မယ်
+vid = None
+
+
 # ---------- Step 1 — Script ----------
 section("1", "Script Input", "Transcript ထုတ်ရန် (သို့) ကိုယ်တိုင်ရေးရန်")
 
@@ -1283,7 +1283,6 @@ with tab_api:
                 st.session_state.gemini_key = None
                 st.rerun()
 
-        key_input = st.session_state.gemini_key  # တိုက်ရိုက်သုံး
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     else:
         st.info("💡  API Key တစ်ခါထည့်ပြီးရင် session တစ်ခုလုံး ပြန်ထည့်စရာ မလိုပါ")
@@ -1325,7 +1324,7 @@ with tab_api:
         disabled=not can_transcribe,
     ):
         if vid is None:
-            st.error("📹  အရင်ဆုံး Video Upload လုပ်ပါ")
+            st.error("📹  အပေါ်မှာ Video Upload လုပ်ပါ")
         else:
             with st.spinner("🎙️  Gemini နဲ့ Transcript ထုတ်နေသည်..."):
                 try:
@@ -1351,14 +1350,11 @@ with tab_api:
                     st.error(f"❌  {str(e)[:250]}")
 
     if not can_transcribe:
-        if vid is None:
-            st.caption("📹  Video Upload လုပ်ပြီးမှ Transcript ထုတ်နိုင်မည်")
-        elif not st.session_state.gemini_key:
-            st.caption("🔑  API Key ထည့်ပြီးမှ Transcript ထုတ်နိုင်မည်")
+        st.caption("📹  Step 2 (အောက်မှာ) Video Upload လုပ်ပြီးမှ Transcript ထုတ်နိုင်မည်")
 
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-# Script area (ဘယ် tab ဖြစ်ဖြစ် ဒီနေရာမှာ ပြ)
+# Script area
 script = st.text_area(
     "Script", value=st.session_state.script, height=200,
     label_visibility="collapsed",
@@ -1379,7 +1375,7 @@ with c2:
 st.divider()
 
 
-# ---------- Step 2 — Video ----------
+# ---------- Step 2 — Video Upload ----------
 section("2", "Video Upload", "MP4 / MOV / AVI / MKV")
 
 vid = st.file_uploader(
