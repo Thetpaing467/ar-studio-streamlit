@@ -92,38 +92,6 @@ html, body, [class*="css"]{
 #MainMenu, footer, header{visibility:hidden}
 .block-container{padding-top:2rem; padding-bottom:3rem; max-width:900px}
 
-/* ---------- Hero ---------- */
-.hero{
-  text-align:center;
-  padding:24px 20px 16px;
-  position:relative;
-}
-.hero::before{
-  content:'';
-  position:absolute;
-  top:0; left:50%;
-  transform:translateX(-50%);
-  width:60%; height:1px;
-  background:linear-gradient(90deg,transparent,var(--accent-2),transparent);
-}
-.main-title{
-  font-size:2.4rem; font-weight:900;
-  letter-spacing:-0.02em;
-  background:linear-gradient(110deg,#FF6B9D 0%,#C66BFF 45%,#6BA8FF 100%);
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-  background-clip:text;
-  margin:0 0 8px;
-  line-height:1.15;
-}
-.main-sub{
-  color:var(--text-dim);
-  font-size:0.92rem;
-  font-weight:500;
-  letter-spacing:0.02em;
-  margin-top:4px;
-}
-
 /* ---------- Section ---------- */
 .section-head{
   display:flex;
@@ -1102,12 +1070,7 @@ def whisper_fast(video_path, model=None):
 
 
 # ==================== UI ====================
-st.markdown("""
-<div class="hero">
-    <div class="main-title">🎬 Myanmar TTS Recap</div>
-    <div class="main-sub">Video → Script → VoxCPM2 / Edge TTS → Cinematic Recap</div>
-</div>
-""", unsafe_allow_html=True)
+# (Hero section ကို လုံးလုံး ဖျောက်ထားပါသည်)
 
 
 # ---------- Step 1 — Script ----------
