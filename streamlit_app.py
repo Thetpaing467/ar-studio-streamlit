@@ -143,8 +143,6 @@ video{border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.4);}
   padding:14px 18px;margin:10px 0;}
 .api-label{font-size:0.75rem;color:var(--text-dim);font-weight:700;
   letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
-
-/* Canvas paste box */
 div[data-testid="stTextArea"]:has(textarea[aria-label="canvas_paste"]) textarea{
   background:linear-gradient(135deg,rgba(255,107,157,0.08),rgba(198,107,255,0.08))!important;
   border:2px dashed rgba(198,107,255,0.45)!important;
@@ -233,14 +231,13 @@ _defaults = {
     "gemini_key": load_saved_key(),
     "ref": None,
     "pkey": None,
-    "transcribe_hash": None,
     "show_key_panel": False,
     "api_lang": "my",
     "auto_transcribe_done": False,
-    "last_video_name": None,
-    "transcript_mode": "api",   # "api" or "canvas"
+    "transcript_mode": "api",
     "last_paste": "",
     "paste_big": "",
+    "last_vid_hash": None,
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -251,9 +248,8 @@ def _on_download_clear():
     st.session_state.script = ""
     st.session_state.pkey = None
     st.session_state.video_up_key = st.session_state.get("video_up_key", 0) + 1
-    st.session_state.transcribe_hash = None
     st.session_state.auto_transcribe_done = False
-    st.session_state.last_video_name = None
+    st.session_state.last_vid_hash = None
     st.session_state.last_paste = ""
     st.session_state.paste_big = ""
 
@@ -816,12 +812,10 @@ def whisper_fast(video_path, model=None):
 
 
 # ==================== UI ====================
-# (Hero section ဖျောက်ထားပါသည်)
 
 # ---------- Step 1 — Video Upload ----------
 section("1", "Video Upload", "Upload လုပ်ပြီး Transcript ထုတ်မည်")
 
-# 📄 Transcript Mode Selector
 mode_choice = st.radio(
     "Transcript နည်းလမ်း",
     ["🎙️ API Auto (Gemini 3.6 Flash)", "📄 Canvas Manual (Link + Paste)"],
@@ -832,7 +826,6 @@ st.session_state.transcript_mode = "api" if "API" in mode_choice else "canvas"
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-# API Key bar — API mode ဆိုရင်ပဲ ပြ
 if st.session_state.transcript_mode == "api":
     if st.session_state.gemini_key:
         masked = st.session_state.gemini_key[:6] + "•" * 16 + st.session_state.gemini_key[-4:]
@@ -881,28 +874,22 @@ if st.session_state.transcript_mode == "api":
                 else:
                     st.error("❌ Key မမှန်ပါ")
 
-    # Language
     lang_choice = st.radio("Transcript ဘာသာစကား",
         ["မြန်မာ", "English", "Auto detect"], horizontal=True,
         label_visibility="collapsed")
     lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
     lang_code = lang_map[lang_choice]
 else:
-    lang_code = "my"  # Canvas mode — manual
+    lang_code = "my"
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-# Video upload
 vid = st.file_uploader("Video", type=["mp4", "mov", "avi", "mkv"],
                        label_visibility="collapsed",
                        key=f"video_up_{st.session_state.video_up_key}")
 
 if vid:
     status(f"{vid.size/(1024*1024):.1f} MB  —  {vid.name}", "ok")
-    if st.session_state.last_video_name != vid.name:
-        st.session_state.last_video_name = vid.name
-        st.session_state.transcribe_hash = None
-        st.session_state.auto_transcribe_done = False
 
 st.divider()
 
@@ -912,40 +899,48 @@ neon_animated = True
 neon_thickness = 15
 neon_speed = 0.4
 
-# ---------- Step 2 — Script ----------
+# ---------- Step 2 — Script (Auto Transcribe) ----------
 section("2", "Script", "Auto transcript (edit လုပ်လို့ရ)")
 
-# ==== API Mode — Auto Transcribe ====
 if st.session_state.transcript_mode == "api":
-    if vid is not None and not st.session_state.auto_transcribe_done:
+    if vid is not None:
+        # Video hash
         vid.seek(0)
         vid_bytes = vid.read()
         vid_hash = hashlib.md5(vid_bytes).hexdigest()
         vid.seek(0)
 
-        if not st.session_state.gemini_key:
-            st.warning("⚠️  Auto transcript အတွက် API Key ထည့်ပါ")
-            st.session_state.auto_transcribe_done = True
-        else:
-            with st.spinner("🎙️  Gemini 3.6 Flash နဲ့ Transcript ထုတ်နေသည်..."):
-                try:
-                    with open("input_transcribe.mp4", "wb") as f:
-                        f.write(vid_bytes)
-                    result = transcribe_with_gemini(
-                        "input_transcribe.mp4",
-                        st.session_state.gemini_key,
-                        lang_code)
-                    if result:
-                        st.session_state.script = result
-                        st.session_state.transcribe_hash = vid_hash
+        # Video အသစ်ဆိုရင် reset
+        if st.session_state.last_vid_hash != vid_hash:
+            st.session_state.last_vid_hash = vid_hash
+            st.session_state.script = ""
+            st.session_state.auto_transcribe_done = False
+
+        # Script မရှိသေးရင် → auto ထုတ်
+        if (not st.session_state.auto_transcribe_done
+                and not st.session_state.script.strip()):
+            if not st.session_state.gemini_key:
+                st.warning("⚠️  Auto transcript အတွက် API Key ထည့်ပါ")
+                st.session_state.auto_transcribe_done = True
+            else:
+                with st.spinner("🎙️  Gemini 3.6 Flash နဲ့ Transcript ထုတ်နေသည်..."):
+                    try:
+                        with open("input_transcribe.mp4", "wb") as f:
+                            f.write(vid_bytes)
+                        result = transcribe_with_gemini(
+                            "input_transcribe.mp4",
+                            st.session_state.gemini_key,
+                            lang_code)
+                        if result:
+                            st.session_state.script = result
+                            st.session_state.auto_transcribe_done = True
+                            st.rerun()
+                        else:
+                            st.error("❌  Transcript မရပါ")
+                            st.session_state.auto_transcribe_done = True
+                    except Exception as e:
+                        st.error(f"❌  {str(e)[:250]}")
                         st.session_state.auto_transcribe_done = True
-                        st.rerun()
-                    else:
-                        st.error("❌  Transcript မရပါ")
-                        st.session_state.auto_transcribe_done = True
-                except Exception as e:
-                    st.error(f"❌  {str(e)[:250]}")
-                    st.session_state.auto_transcribe_done = True
 
     if vid and st.session_state.script.strip():
         c1, c2 = st.columns([3, 1])
@@ -955,10 +950,8 @@ if st.session_state.transcript_mode == "api":
             if st.button("🔄  ပြန်ထုတ်", use_container_width=True):
                 st.session_state.script = ""
                 st.session_state.auto_transcribe_done = False
-                st.session_state.transcribe_hash = None
                 st.rerun()
 
-# ==== Canvas Mode — Link + Paste ====
 else:
     st.link_button("↗️  Canvas ကို Tab အသစ်မှာ ဖွင့်", CANVAS_URL,
                    use_container_width=True)
@@ -991,7 +984,7 @@ else:
             st.session_state.paste_big = ""
             st.rerun()
 
-# Script textarea (တစ်ခုပဲ — နှစ်မျိုးလုံး ဒီနေရာမှာ ပြ)
+# Script textarea
 script = st.text_area("Script", value=st.session_state.script,
     height=220, label_visibility="collapsed",
     placeholder="✍️  Auto ဖြည့်ပေးမည်... (သို့) ဒီနေရာမှာ ကိုယ်တိုင်ရေးပါ")
@@ -1004,7 +997,6 @@ with c2:
     if st.button("🗑️  Clear", use_container_width=True):
         st.session_state.script = ""
         st.session_state.auto_transcribe_done = False
-        st.session_state.transcribe_hash = None
         st.session_state.last_paste = ""
         st.rerun()
 
@@ -1072,16 +1064,22 @@ else:
 
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-if st.button("✨  Generate Recap Video", type="primary", use_container_width=True):
-    if not script.strip():
-        st.error("📝  Script paste လုပ်ပါ"); st.stop()
-    if vid is None:
-        st.error("📹  Video Upload လုပ်ပါ"); st.stop()
+# ✅ ခလုတ် — Script + Video ရှိရင် active
+can_generate = bool(script.strip()) and (vid is not None)
 
+if not can_generate:
+    missing = []
+    if not script.strip(): missing.append("📝 Script")
+    if vid is None: missing.append("📹 Video")
+    st.markdown(
+        f'<div style="text-align:center;padding:6px;color:#5a5a7a;'
+        f'font-size:0.8rem;">⚠️  လိုအပ်သည်: {" • ".join(missing)}</div>',
+        unsafe_allow_html=True)
+
+if st.button("✨  Generate Recap Video", type="primary",
+             use_container_width=True, disabled=not can_generate):
     total_start = time.time(); step_times = {}
     script_n = normalize_script(script)
-    if not script_n.strip():
-        st.error("Script မှာ စာအသုံးပြုနိုင်တာ မပါပါ"); st.stop()
 
     vid.seek(0)
     with open("input.mp4", "wb") as f: f.write(vid.read())
