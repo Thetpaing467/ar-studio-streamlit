@@ -95,7 +95,7 @@ html, body, [class*="css"]{
 /* ---------- Hero ---------- */
 .hero{
   text-align:center;
-  padding:32px 20px 24px;
+  padding:24px 20px 16px;
   position:relative;
 }
 .hero::before{
@@ -114,26 +114,14 @@ html, body, [class*="css"]{
   -webkit-text-fill-color:transparent;
   background-clip:text;
   margin:0 0 8px;
-  line-height:1.1;
+  line-height:1.15;
 }
 .main-sub{
   color:var(--text-dim);
   font-size:0.92rem;
   font-weight:500;
   letter-spacing:0.02em;
-}
-.hero-pill{
-  display:inline-block;
-  margin-top:14px;
-  padding:6px 14px;
-  border-radius:999px;
-  background:rgba(198,107,255,0.10);
-  border:1px solid rgba(198,107,255,0.25);
-  color:#c7a4ff;
-  font-size:0.75rem;
-  font-weight:600;
-  letter-spacing:0.08em;
-  text-transform:uppercase;
+  margin-top:4px;
 }
 
 /* ---------- Section ---------- */
@@ -419,15 +407,6 @@ div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea::placeh
   color:var(--text-muted);
   font-size:0.85rem;
   margin-bottom:20px;
-}
-
-/* ---------- Preview ---------- */
-.preview-frame{
-  border-radius:16px;
-  overflow:hidden;
-  border:1px solid var(--border);
-  box-shadow:0 12px 40px rgba(0,0,0,0.35);
-  margin:12px 0;
 }
 
 /* ---------- Video ---------- */
@@ -1127,7 +1106,6 @@ st.markdown("""
 <div class="hero">
     <div class="main-title">🎬 Myanmar TTS Recap</div>
     <div class="main-sub">Video → Script → VoxCPM2 / Edge TTS → Cinematic Recap</div>
-    <div class="hero-pill">AI-Powered Studio</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1199,20 +1177,15 @@ if vid:
 st.divider()
 
 
-# ---------- Step 3 — Effects ----------
-section("3", "Effects", "Auto applied: Neon Border + Mirror")
+# ---------- Effects (internal only, hidden from UI) ----------
 use_neon = True
 neon_animated = True
 neon_thickness = 15
 neon_speed = 0.4
 
-status("Neon Border — Auto ON", "info")
-st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-status("Mirror Flip — Auto ON", "info")
 
-
-# ---------- Step 4 — Subtitle ----------
-section("4", "Subtitle", "Burn-in captions ထည့်မည်")
+# ---------- Step 3 — Subtitle ----------
+section("3", "Subtitle", "Burn-in captions ထည့်မည်")
 use_sub = st.toggle("🎬  Enable Subtitle Burn-in", value=True)
 pos_y = 100
 if use_sub:
@@ -1221,9 +1194,9 @@ if use_sub:
 st.divider()
 
 
-# ---------- Step 5 — Preview ----------
+# ---------- Step 4 — Preview ----------
 if vid:
-    section("5", "Preview", "နောက်ဆုံး output ပုံစံ")
+    section("4", "Preview", "နောက်ဆုံး output ပုံစံ")
     with st.spinner("🖼️  Preview ပြင်ဆင်နေသည်..."):
         pkey = (vid.name, vid.size)
         if st.session_state.get("pkey") != pkey or not os.path.exists("preview.mp4"):
@@ -1255,13 +1228,11 @@ if vid:
             comp.resize((pw, int(H * (pw / W))), Image.LANCZOS)\
                 .convert("RGB").save("prev_out.png")
             st.image("prev_out.png", use_container_width=True)
-            if use_neon and neon_animated:
-                st.caption("🎬  Animated — Output မှာ အလင်းတန်း ရွေ့လျားနေမည်")
     st.divider()
 
 
-# ---------- Step 6 — Generate ----------
-section("6", "Generate", "Final recap video ဖန်တီးမည်")
+# ---------- Step 5 — Generate ----------
+section("5", "Generate", "Final recap video ဖန်တီးမည်")
 
 use_voxcpm = st.toggle("🎙️  VoxCPM2 သုံးမလား? (Fail ဖြစ်ရင် Edge TTS auto)", value=True)
 
