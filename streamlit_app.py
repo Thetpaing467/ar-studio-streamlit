@@ -1,5 +1,5 @@
 import streamlit as st
-import os, re, hashlib, ffmpeg, shutil, subprocess, asyncio, time
+import os, re, hashlib, ffmpeg, shutil, subprocess, asyncio, time, glob
 import concurrent.futures
 import numpy as np
 import edge_tts
@@ -14,6 +14,7 @@ SPACES = [
     {"space": "hgghfhjfhjguyjf/Voxcpm-Burmese-Tts", "type": "burmese"},
 ]
 
+PASSWORD = "voxcpm2026"
 FONT_FILE = "MyanmarPadaung.ttf"
 
 FS, BH, BA = 30, 100, 200
@@ -23,7 +24,7 @@ FINAL_PRESET = "ultrafast"
 FINAL_CRF = 20
 USE_FAST_VAD = True
 AUDIO_BITRATE = "128k"
-TTS_CHUNK = 300
+TTS_CHUNK = 300      # သေးလေ subtitle sync ပိုတိကျ
 EDGE_CHUNK = 200
 TTS_WORKERS = 3
 PNG_WORKERS = 4
@@ -42,18 +43,16 @@ EDGE_VOICES = {
 }
 EDGE_VOICE_FIXED = "male"
 
-# ==================== BGM DUCKING CONFIG ====================
-BGM_VOLUME = 0.25
-BGM_DUCK_VOLUME = 0.08
-BGM_DUCK_THRESHOLD = 0.03
-BGM_DUCK_RATIO = 8
-BGM_DUCK_ATTACK = 20
-BGM_DUCK_RELEASE = 400
+# ---- BGM (တစ်ခါတင်ရင် သိမ်းထားမယ်) ----
+BGM_DIR = "bgm_saved"
+BGM_DEFAULT_VOL = 0.35
+BGM_DEFAULT_RATIO = 8
 
 st.set_page_config(page_title="Myanmar TTS Recap", page_icon="🎬", layout="centered")
 
 
 def _on_download_clear():
+    """Download နှိပ်ရင် Script + Video + Paste ရှင်း (Ref Audio / BGM မထိ)"""
     st.session_state.script = ""
     st.session_state.last_paste = ""
     st.session_state.paste_big = ""
@@ -92,12 +91,26 @@ hr{border-color:rgba(255,255,255,.08);margin:24px 0}
 </style>
 """, unsafe_allow_html=True)
 
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
+    st.markdown("<div class='main-title'>🔐 Private App</div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        pwd = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Password")
+        if st.button("Login", use_container_width=True):
+            if pwd == PASSWORD:
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("Password မှား")
+    st.stop()
+
 
 # ==================== Session State Init ====================
 if "script" not in st.session_state: st.session_state.script = ""
 if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
-if "bgm_path" not in st.session_state: st.session_state.bgm_path = None
-if "bgm_name" not in st.session_state: st.session_state.bgm_name = None
 
 
 # ==================== Utility Functions ====================
@@ -126,6 +139,57 @@ def s2t(ts):
         h, mi, se, ms = m.groups()
         return int(h)*3600 + int(mi)*60 + int(se) + int(ms.ljust(3,'0'))/1000
     return None
+
+
+# ==================== BGM Persistence ====================
+
+def get_saved_bgm():
+    """သိမ်းထားတဲ့ BGM path (မရှိရင် None)"""
+    files = sorted(glob.glob(os.path.join(BGM_DIR, "bgm.*")))
+    for f in files:
+        if os.path.getsize(f) > 0:
+            return f
+    return None
+
+
+def save_bgm(uploaded):
+    """Upload လုပ်တဲ့ BGM ကို disk ပေါ်သိမ်း (အရင်ဟာ အစားထိုး)"""
+    os.makedirs(BGM_DIR, exist_ok=True)
+    for old in glob.glob(os.path.join(BGM_DIR, "bgm.*")):
+        try: os.remove(old)
+        except Exception: pass
+    ext = os.path.splitext(uploaded.name)[1].lower() or ".mp3"
+    dst = os.path.join(BGM_DIR, "bgm" + ext)
+    uploaded.seek(0)
+    with open(dst, "wb") as f:
+        f.write(uploaded.read())
+    return dst
+
+
+def delete_bgm():
+    for old in glob.glob(os.path.join(BGM_DIR, "bgm.*")):
+        try: os.remove(old)
+        except Exception: pass
+
+
+def build_audio_fc(tempo, bgm_vol, duck, duck_ratio):
+    """Voice = input 1, BGM = input 2 → output label [a]"""
+    fmt = "aformat=sample_rates=48000:channel_layouts=stereo"
+    if duck:
+        return (
+            f"[1:a]atempo={tempo},{fmt},asplit=2[v][sc];"
+            f"[2:a]{fmt},volume={bgm_vol}[bg];"
+            f"[bg][sc]sidechaincompress=threshold=0.03:ratio={duck_ratio}"
+            f":attack=20:release=500:makeup=1[duck];"
+            f"[v][duck]amix=inputs=2:duration=first:"
+            f"dropout_transition=0:normalize=0[a]"
+        )
+    return (
+        f"[1:a]atempo={tempo},{fmt}[v];"
+        f"[2:a]{fmt},volume={bgm_vol}[bg];"
+        f"[v][bg]amix=inputs=2:duration=first:"
+        f"dropout_transition=0:normalize=0[a]"
+    )
 
 
 def render_png(text, out, fp, W, H, fs=30, pos_y=100, bh=100, ba=100,
@@ -193,6 +257,7 @@ def split_for_sub(text, mc=30):
 
 
 def scr_to_srt_timed(pieces, total, path, mc=30):
+    """pieces = [(text, audio_seconds)] — chunk တစ်ခုချင်းစီမှာ အချိန် reset ဖြစ်လို့ drift မရှိ"""
     raw = sum(d for _, d in pieces)
     if raw <= 0: return None
     k = total / raw
@@ -279,15 +344,36 @@ def keep_count(video_in, segments):
     return int(mask.sum()), fps
 
 
-def simple_merge(video_in, audio_in, output_video, tempo, segments=None):
-    vf = []
+def simple_merge(video_in, audio_in, output_video, tempo, segments=None,
+                 bgm=None, bgm_vol=BGM_DEFAULT_VOL, duck=True,
+                 duck_ratio=BGM_DEFAULT_RATIO):
+    """Fallback merge — BGM + ducking ပါ ထည့်ပေးထား"""
+    sel = None
     if segments:
         sel = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in segments)
-        vf = ["-vf", f"select='{sel}',setpts=N/FRAME_RATE/TB"]
-    cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
-           "-af", f"atempo={tempo}", "-map", "0:v", "-map", "1:a"] + vf + [
-           "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-           "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-shortest", output_video]
+
+    if bgm:
+        afc = build_audio_fc(tempo, bgm_vol, duck, duck_ratio)
+        if sel:
+            fc = f"[0:v]select='{sel}',setpts=N/FRAME_RATE/TB[vout];" + afc
+            vmap = "[vout]"
+        else:
+            fc = afc
+            vmap = "0:v"
+        cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
+               "-stream_loop", "-1", "-i", bgm,
+               "-filter_complex", fc,
+               "-map", vmap, "-map", "[a]",
+               "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+               "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-shortest", output_video]
+    else:
+        vf = []
+        if sel:
+            vf = ["-vf", f"select='{sel}',setpts=N/FRAME_RATE/TB"]
+        cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
+               "-af", f"atempo={tempo}", "-map", "0:v", "-map", "1:a"] + vf + [
+               "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+               "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-shortest", output_video]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
     if r.returncode != 0:
         raise Exception(f"FFmpeg: {(r.stderr or '')[-300:]}")
@@ -408,7 +494,7 @@ def final_render(video_in, audio_in, output_video, tempo,
             except queue.Empty:
                 if stop.is_set(): return None
 
-    def reader():
+    def reader():          # Decode thread
         cap = cv2.VideoCapture(video_in)
         i = 0; p = 0
         try:
@@ -428,7 +514,7 @@ def final_render(video_in, audio_in, output_video, tempo,
             cap.release()
             qput(q_in, None)
 
-    def writer():
+    def writer():          # ffmpeg pipe write thread
         try:
             while True:
                 bts = qget(q_out)
@@ -479,71 +565,31 @@ def final_render(video_in, audio_in, output_video, tempo,
     return output_video
 
 
-def mux_audio(video_in, audio_in, output_video, tempo):
-    cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
-           "-af", f"atempo={tempo}", "-map", "0:v", "-map", "1:a",
-           "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE,
-           "-shortest", output_video]
+def mux_audio(video_in, audio_in, output_video, tempo,
+              bgm=None, bgm_vol=BGM_DEFAULT_VOL, duck=True,
+              duck_ratio=BGM_DEFAULT_RATIO):
+    """Voice + (optional) BGM with sidechain ducking"""
+    if not bgm:
+        cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
+               "-af", f"atempo={tempo}", "-map", "0:v", "-map", "1:a",
+               "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE,
+               "-shortest", output_video]
+    else:
+        fc = build_audio_fc(tempo, bgm_vol, duck, duck_ratio)
+        cmd = ["ffmpeg", "-y", "-i", video_in, "-i", audio_in,
+               "-stream_loop", "-1", "-i", bgm,
+               "-filter_complex", fc,
+               "-map", "0:v", "-map", "[a]",
+               "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE,
+               "-shortest", output_video]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
     if r.returncode != 0:
         raise Exception(f"Mux: {(r.stderr or '')[-300:]}")
     return output_video
 
 
-# ==================== BGM MIX (Audio Ducking) — FIXED ====================
-def mix_bgm_with_ducking(voice_path, bgm_path, output_path,
-                         bgm_vol=BGM_VOLUME,
-                         duck_vol=BGM_DUCK_VOLUME,
-                         threshold=BGM_DUCK_THRESHOLD,
-                         ratio=BGM_DUCK_RATIO,
-                         attack=BGM_DUCK_ATTACK,
-                         release=BGM_DUCK_RELEASE):
-    """
-    Voice + BGM ကို Audio Ducking နဲ့ ရောစပ်
-    ⚠️ FIX: BGM speed မြန်နေတာ ပြင်ထားသည် (sample rate ညှိ + PTS reset)
-    """
-    vdur = audio_dur(voice_path)
-
-    filter_complex = (
-        # BGM — sample rate 48000 ညှိ + PTS reset (speed မပြောင်း)
-        f"[1:a]aresample=48000,asetpts=PTS-STARTPTS,"
-        f"aloop=loop=-1:size=2e+09:start=0,"
-        f"atrim=0:{vdur},asetpts=PTS-STARTPTS,"
-        f"volume={bgm_vol}[bgm];"
-
-        # Voice — sample rate 48000 ညှိ + PTS reset
-        f"[0:a]aresample=48000,asetpts=PTS-STARTPTS,"
-        f"asplit=2[voice_main][voice_key];"
-
-        # Ducking
-        f"[bgm][voice_key]sidechaincompress="
-        f"threshold={threshold}:ratio={ratio}:"
-        f"attack={attack}:release={release}:"
-        f"makeup=1[bgm_ducked];"
-
-        # Mix
-        f"[voice_main][bgm_ducked]amix=inputs=2:duration=first:"
-        f"dropout_transition=0:normalize=0[out]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", voice_path,
-        "-i", bgm_path,
-        "-filter_complex", filter_complex,
-        "-map", "[out]",
-        "-c:a", "libmp3lame", "-b:a", AUDIO_BITRATE, "-ar", "48000",
-        "-shortest",
-        output_path
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="ignore")
-    if r.returncode != 0:
-        raise Exception(f"BGM Mix: {(r.stderr or '')[-400:]}")
-    return output_path
-
-
 def prepare_video_job(video_in, fw_model):
+    """Whisper/VAD နဲ့ speech segments ပဲ ရှာ (TTS နဲ့ တပြိုင်နက် run)"""
     segments = whisper_fast(video_in, fw_model)
     if not segments: raise Exception("Speech မတွေ့")
     kept, vfps = keep_count(video_in, segments)
@@ -664,10 +710,11 @@ def edge_tts_run(chunks, out_path, cb=None, workers=TTS_WORKERS):
 
     good = [a for a in results if a]
     if not good:
-        raise Exception("Edge TTS အသံမရပါ — edge-tts update လုပ်ပါ")
+        raise Exception("Edge TTS အသံမရပါ — edge-tts ကို update လုပ်ပါ (edge-tts>=7.0.0) / ခဏနေ ပြန်စမ်းပါ")
     if skipped:
         st.warning("⚠️ ကျော်လိုက်တဲ့ အပိုင်း: " + " | ".join(chunks[i][:30] for i in skipped))
 
+    # chunk တစ်ခုချင်းရဲ့ အမှန်တကယ် အသံအရှည်
     pieces = [(chunks[i], audio_dur(a)) for i, a in enumerate(results) if a]
 
     with open("edge_concat.txt", "w", encoding="utf-8") as f:
@@ -858,55 +905,6 @@ vid = st.file_uploader(
 if vid: st.success(f"✅ {vid.size/(1024*1024):.1f} MB")
 st.divider()
 
-# ==================== Step 3 — Background Music ====================
-st.subheader("🎵 Step 3 — Background Music (Optional)")
-
-if st.session_state.bgm_path and os.path.exists(st.session_state.bgm_path):
-    st.success(f"✅ BGM: {st.session_state.bgm_name}")
-    col_b1, col_b2 = st.columns([3, 1])
-    with col_b1:
-        st.caption("🎵 ဒီ BGM ကို ဆက်သုံးမယ် (ပြန်မတောင်းတော့ပါ)")
-    with col_b2:
-        if st.button("🔄 BGM ဖျက်", use_container_width=True):
-            try: os.remove(st.session_state.bgm_path)
-            except: pass
-            st.session_state.bgm_path = None
-            st.session_state.bgm_name = None
-            st.rerun()
-else:
-    bgm_file = st.file_uploader(
-        "🎵 BGM (mp3/wav/m4a) — တစ်ခါပဲ တင်ရမယ်",
-        type=["mp3","wav","m4a","aac","ogg"],
-        key="bgm_up"
-    )
-    if bgm_file:
-        os.makedirs("bgm_store", exist_ok=True)
-        h = hashlib.md5(bgm_file.getvalue()).hexdigest()[:12]
-        ext = os.path.splitext(bgm_file.name)[1] or ".mp3"
-        dst = f"bgm_store/bgm_{h}{ext}"
-        with open(dst, "wb") as f:
-            f.write(bgm_file.getbuffer())
-        st.session_state.bgm_path = dst
-        st.session_state.bgm_name = bgm_file.name
-        st.success(f"✅ BGM သိမ်းပြီး: {bgm_file.name}")
-        st.rerun()
-
-if st.session_state.bgm_path:
-    col_v1, col_v2 = st.columns(2)
-    with col_v1:
-        bgm_vol = st.slider("🎚️ BGM အသံ (စကားမပြောချိန်)", 0.0, 1.0,
-                            BGM_VOLUME, 0.05)
-    with col_v2:
-        duck_vol = st.slider("🔉 BGM အသံ (စကားပြောချိန်)", 0.0, 0.5,
-                             BGM_DUCK_VOLUME, 0.01)
-    st.caption("💡 Audio Ducking — စကားပြောချိန် BGM အလိုအလျောက် နှိမ့်မယ်")
-else:
-    bgm_vol = BGM_VOLUME
-    duck_vol = BGM_DUCK_VOLUME
-    st.caption("🎵 BGM မထည့်ရင် ရိုးရိုး voice ပဲ ထွက်မယ်")
-
-st.divider()
-
 use_neon = True
 neon_animated = True
 neon_thickness = 15
@@ -955,8 +953,43 @@ if vid:
                 st.caption("🎬 Animated — Output Video မှာ အလင်းတန်း ပတ်ပြေးနေမည်")
 st.divider()
 
-# ==================== Step 6 — Generate ====================
-st.subheader("🚀 Step 6 — Generate")
+# ==================== Step 6 — Background Music ====================
+st.subheader("🎵 Step 6 — Background Music")
+
+bgm_file = st.file_uploader("🎵 BGM — Optional (တစ်ခါတင်ရင် သိမ်းထားမယ်)",
+                            type=["mp3", "wav", "m4a"], key="bgm_up")
+if bgm_file:
+    bkey = (bgm_file.name, bgm_file.size)
+    if st.session_state.get("bgm_key") != bkey or get_saved_bgm() is None:
+        save_bgm(bgm_file)
+        st.session_state.bgm_key = bkey
+    st.success(f"✅ BGM သိမ်းပြီး — {bgm_file.name}")
+
+saved_bgm = get_saved_bgm()
+bgm_path = None
+bgm_vol, bgm_duck, bgm_ratio = BGM_DEFAULT_VOL, True, BGM_DEFAULT_RATIO
+
+if saved_bgm:
+    if not bgm_file:
+        st.caption(f"📎 BGM (အရင် ထည့်ထားတာ ဆက်ရှိနေတယ်) — {os.path.basename(saved_bgm)}")
+    st.audio(saved_bgm)
+    use_bgm = st.toggle("🎵 BGM သုံးမယ်", value=True, key="use_bgm")
+    if use_bgm:
+        bgm_path = saved_bgm
+        bgm_vol = st.slider("🔊 Music volume", 0.05, 1.0, BGM_DEFAULT_VOL, 0.05, key="bgm_vol")
+        bgm_duck = st.toggle("🦆 Audio Ducking (voice ပြောရင် music ကျ)", value=True, key="bgm_duck")
+        if bgm_duck:
+            bgm_ratio = st.slider("Duck strength", 2, 20, BGM_DEFAULT_RATIO, 1, key="bgm_ratio")
+    if st.button("🗑️ BGM ဖျက်မယ်", use_container_width=True, key="bgm_del"):
+        delete_bgm()
+        st.session_state.bgm_key = None
+        st.rerun()
+else:
+    st.caption("BGM မရှိသေးပါ — တင်လိုက်ရင် နောက်တစ်ခါ ပြန်မတင်ရတော့ပါ")
+st.divider()
+
+# ==================== Step 7 — Generate ====================
+st.subheader("🚀 Step 7 — Generate")
 
 use_voxcpm = st.toggle("🎙️ VoxCPM2 သုံးမလား?", value=True)
 
@@ -993,6 +1026,7 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
         try: fw_model = get_fw_model()
         except Exception: pass
 
+    # Whisper/VAD ကို TTS နဲ့ တပြိုင်နက် run
     job_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     job = job_pool.submit(prepare_video_job, "input.mp4", fw_model)
 
@@ -1016,29 +1050,7 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
 
     adur = audio_dur("voice.mp3")
     tempo = max(0.5, min(2.0, adur / vdur))
-    eff = adur / tempo
-
-    # ==================== BGM MIX (Ducking) ====================
-    t0 = time.time()
-    final_voice = "voice.mp3"
-    if st.session_state.bgm_path and os.path.exists(st.session_state.bgm_path):
-        try:
-            with st.spinner("🎵 BGM Ducking Mix..."):
-                mix_bgm_with_ducking(
-                    "voice.mp3", st.session_state.bgm_path, "voice_bgm.mp3",
-                    bgm_vol=bgm_vol, duck_vol=duck_vol
-                )
-            final_voice = "voice_bgm.mp3"
-            st.success("✅ Audio Ducking — စကားပြောချိန် BGM နှိမ့်ပြီး")
-        except Exception as e:
-            st.warning(f"⚠️ BGM Mix Fail: {e} — voice ပဲ သုံးမယ်")
-            final_voice = "voice.mp3"
-    step_times["🎵 BGM"] = time.time() - t0
-
-    if final_voice != "voice.mp3":
-        adur2 = audio_dur(final_voice)
-        tempo = max(0.5, min(2.0, adur2 / vdur))
-        eff = adur2 / tempo
+    eff = adur / tempo     # atempo ပြီးနောက် အသံအရှည်အမှန်
 
     with st.spinner("🎬 Finalizing..."):
         try:
@@ -1048,10 +1060,24 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
                          bh=BH, ba=BA, use_neon=use_neon,
                          thickness=neon_thickness, speed=neon_speed,
                          segments=segments)
-            mux_audio("video_only.mp4", final_voice, "final.mp4", tempo)
+            try:
+                mux_audio("video_only.mp4", "voice.mp3", "final.mp4", tempo,
+                          bgm=bgm_path, bgm_vol=bgm_vol,
+                          duck=bgm_duck, duck_ratio=bgm_ratio)
+            except Exception as e:
+                if not bgm_path: raise
+                st.warning(f"⚠️ BGM mix Fail ({str(e)[:80]}) — BGM မပါဘဲ ပြန်လုပ်")
+                mux_audio("video_only.mp4", "voice.mp3", "final.mp4", tempo)
         except Exception as e:
             st.warning(f"⚠️ Fail: {e}")
-            simple_merge("input.mp4", final_voice, "final.mp4", tempo, segments)
+            try:
+                simple_merge("input.mp4", "voice.mp3", "final.mp4", tempo, segments,
+                             bgm=bgm_path, bgm_vol=bgm_vol,
+                             duck=bgm_duck, duck_ratio=bgm_ratio)
+            except Exception as e2:
+                if not bgm_path: raise
+                st.warning(f"⚠️ BGM mix Fail ({str(e2)[:80]}) — BGM မပါဘဲ ပြန်လုပ်")
+                simple_merge("input.mp4", "voice.mp3", "final.mp4", tempo, segments)
     step_times["🎬 Render"] = time.time() - t0
 
     total_elapsed = time.time() - total_start
