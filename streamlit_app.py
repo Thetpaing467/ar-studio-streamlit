@@ -1,5 +1,5 @@
 import streamlit as st
-import os, re, hashlib, ffmpeg, shutil, subprocess, asyncio, time
+import os, re, hashlib, ffmpeg, shutil, subprocess, asyncio, time, json, base64
 import concurrent.futures
 import numpy as np
 import edge_tts
@@ -42,6 +42,10 @@ EDGE_VOICES = {
     "male":   "my-MM-ThihaNeural",
 }
 EDGE_VOICE_FIXED = "male"
+
+# Gemini Transcription
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_KEY_FILE = ".gemini_key"
 
 st.set_page_config(
     page_title="Myanmar TTS Recap",
@@ -394,6 +398,43 @@ video{
   box-shadow:0 10px 32px rgba(74,222,128,0.5)!important;
   filter:brightness(1.05);
 }
+
+/* ---------- Tabs ---------- */
+[data-testid="stTabs"] [data-baseweb="tab-list"]{
+  gap:8px;
+  background:transparent;
+  border-bottom:1px solid var(--border);
+}
+[data-testid="stTabs"] [data-baseweb="tab"]{
+  background:transparent!important;
+  border-radius:10px 10px 0 0!important;
+  padding:10px 20px!important;
+  color:var(--text-dim)!important;
+  font-weight:600!important;
+  border:none!important;
+}
+[data-testid="stTabs"] [aria-selected="true"]{
+  background:linear-gradient(135deg,rgba(198,107,255,0.15),rgba(107,168,255,0.15))!important;
+  color:#fff!important;
+  border-bottom:2px solid var(--accent-2)!important;
+}
+
+/* ---------- API Key card ---------- */
+.api-card{
+  background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(107,168,255,0.08));
+  border:1px solid rgba(74,222,128,0.25);
+  border-radius:14px;
+  padding:14px 18px;
+  margin:10px 0;
+}
+.api-label{
+  font-size:0.75rem;
+  color:var(--text-dim);
+  font-weight:700;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -415,6 +456,37 @@ def status(text, kind="ok"):
         f'<span class="status-pill status-{kind}">{icons[kind]} {text}</span>',
         unsafe_allow_html=True
     )
+
+
+def load_saved_key():
+    """File ကနေ API key ပြန်ဖတ်"""
+    try:
+        if os.path.exists(GEMINI_KEY_FILE):
+            with open(GEMINI_KEY_FILE, "r") as f:
+                k = f.read().strip()
+                if k:
+                    return k
+    except Exception:
+        pass
+    return None
+
+
+def save_key(k):
+    """API key ကို file မှာ သိမ်း (session ပြတ်သွားလည်း ဆက်ရှိ)"""
+    try:
+        with open(GEMINI_KEY_FILE, "w") as f:
+            f.write(k.strip())
+        os.chmod(GEMINI_KEY_FILE, 0o600)
+    except Exception:
+        pass
+
+
+def clear_saved_key():
+    try:
+        if os.path.exists(GEMINI_KEY_FILE):
+            os.remove(GEMINI_KEY_FILE)
+    except Exception:
+        pass
 
 
 # ==================== Auth ====================
@@ -446,6 +518,9 @@ if not st.session_state.auth:
 # ==================== Session Init ====================
 if "script" not in st.session_state: st.session_state.script = ""
 if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
+if "gemini_key" not in st.session_state:
+    st.session_state.gemini_key = load_saved_key()
+if "transcript_ready" not in st.session_state: st.session_state.transcript_ready = False
 
 
 def _on_download_clear():
@@ -454,6 +529,85 @@ def _on_download_clear():
     st.session_state.paste_big = ""
     st.session_state.pkey = None
     st.session_state.video_up_key = st.session_state.get("video_up_key", 0) + 1
+    st.session_state.transcript_ready = False
+
+
+# ==================== Gemini Transcription ====================
+def transcribe_with_gemini(video_path, api_key, language="my"):
+    """Gemini API နဲ့ video/audio ကို transcript ထုတ်"""
+    import requests
+
+    # Video → audio extract (Gemini ကို size သေးသေးပို့ရ)
+    audio_path = "gemini_transcribe.m4a"
+    subprocess.run([
+        "ffmpeg", "-y", "-i", video_path,
+        "-vn", "-acodec", "aac", "-b:a", "64k",
+        "-ar", "16000", "-ac", "1",
+        audio_path
+    ], capture_output=True, check=True)
+
+    size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+    if size_mb > 20:
+        # ကြီးရင် ဖြတ်ပစ် (Gemini inline limit)
+        subprocess.run([
+            "ffmpeg", "-y", "-i", audio_path,
+            "-t", "600",  # 10 min ပဲ
+            "-c", "copy", "gemini_transcribe_cut.m4a"
+        ], capture_output=True, check=True)
+        audio_path = "gemini_transcribe_cut.m4a"
+
+    with open(audio_path, "rb") as f:
+        audio_b64 = base64.b64encode(f.read()).decode()
+
+    lang_instruction = {
+        "my": "မြန်မာဘာသာဖြင့်",
+        "en": "English",
+        "auto": "auto-detect",
+    }.get(language, "မြန်မာဘာသာဖြင့်")
+
+    prompt = (
+        f"ဒီ audio ဖိုင်ထဲမှာပြောထားတာကို {lang_instruction} transcript ထုတ်ပေးပါ။ "
+        "စာကြောင်းတစ်ကြောင်းချင်းစီကို သီးသန့်ထုတ်ပေးပါ။ "
+        "အပိုရှင်းလင်းချက်၊ timestamp၊ ခေါင်းစဉ် မထည့်ပါနဲ့။ "
+        "Transcript ကိုပဲ တိုက်ရိုက်ထုတ်ပေးပါ။"
+    )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "audio/mp4", "data": audio_b64}}
+            ]
+        }],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 8192,
+        }
+    }
+
+    r = requests.post(url, json=payload, timeout=180)
+    if r.status_code != 200:
+        try:
+            err = r.json().get("error", {}).get("message", r.text[:200])
+        except Exception:
+            err = r.text[:200]
+        raise Exception(f"Gemini API: {err}")
+
+    data = r.json()
+    try:
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        raise Exception("Gemini: response format မမှန်ပါ")
+
+    # cleanup
+    for p in ["gemini_transcribe.m4a", "gemini_transcribe_cut.m4a"]:
+        try:
+            if os.path.exists(p): os.remove(p)
+        except Exception:
+            pass
+
+    return text.strip()
 
 
 # ==================== Utility Functions ====================
@@ -1070,45 +1224,143 @@ def whisper_fast(video_path, model=None):
 
 
 # ==================== UI ====================
-# (Hero section ကို လုံးလုံး ဖျောက်ထားပါသည်)
+# (Hero section ဖျောက်ထားပါသည်)
 
 
 # ---------- Step 1 — Script ----------
-section("1", "Script Input", "Gemini Canvas မှ Transcript ကို copy → paste")
+section("1", "Script Input", "Transcript ထုတ်ရန် (သို့) ကိုယ်တိုင်ရေးရန်")
 
-with st.expander("📄  Transcript ထုတ်ယူမည့် Canvas ဖွင့်ရန်", expanded=False):
-    st.link_button("↗️  Open Gemini Canvas", CANVAS_URL, use_container_width=True)
-    st.caption("Canvas ဖွင့် → Transcript Copy → အောက်က Paste Box ထဲ Paste")
+tab_manual, tab_api = st.tabs(["✍️  ကိုယ်တိုင်ရေး / Paste", "🎙️  API နဲ့ Transcript ထုတ်"])
 
-st.markdown("""
-<div style="text-align:center;margin:16px 0 8px">
-    <span style="font-size:1rem;font-weight:700;
-        background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-        background-clip:text">
-        📋  Quick Paste
-    </span>
-</div>
-""", unsafe_allow_html=True)
+# ----- Tab 1: Manual -----
+with tab_manual:
+    st.markdown("""
+    <div style="text-align:center;margin:12px 0 8px">
+        <span style="font-size:0.95rem;font-weight:700;
+            background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            background-clip:text">
+            📋  Quick Paste (Auto fill)
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
 
-pasted_now = st.text_area(
-    "paste", value="", height=80, key="paste_big",
-    label_visibility="collapsed",
-    placeholder="📋  Long-press → Paste  (or Ctrl+V)  —  Auto ဖြည့်ပေးမည်"
-)
+    pasted_now = st.text_area(
+        "paste", value="", height=80, key="paste_big",
+        label_visibility="collapsed",
+        placeholder="📋  Long-press → Paste  (or Ctrl+V)  —  Auto ဖြည့်ပေးမည်"
+    )
 
-if pasted_now and pasted_now.strip():
-    clean = pasted_now.strip()
-    if clean != st.session_state.get("last_paste", ""):
-        st.session_state.last_paste = clean
-        lines = [l.strip().strip('"\u201c\u201d').strip() for l in clean.splitlines()]
-        result = "\n\n".join(l for l in lines if l)
-        st.session_state.script = result
-        st.session_state.paste_big = ""
-        st.rerun()
+    if pasted_now and pasted_now.strip():
+        clean = pasted_now.strip()
+        if clean != st.session_state.get("last_paste", ""):
+            st.session_state.last_paste = clean
+            lines = [l.strip().strip('"\u201c\u201d').strip() for l in clean.splitlines()]
+            result = "\n\n".join(l for l in lines if l)
+            st.session_state.script = result
+            st.session_state.paste_big = ""
+            st.rerun()
 
+# ----- Tab 2: Gemini API -----
+with tab_api:
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # API Key status
+    if st.session_state.gemini_key:
+        masked = st.session_state.gemini_key[:6] + "•" * 20 + st.session_state.gemini_key[-4:]
+        st.markdown(f"""
+        <div class="api-card">
+            <div class="api-label">🔑  Gemini API Key — Saved</div>
+            <div style="font-family:monospace;font-size:0.9rem;color:#86efac;
+                letter-spacing:0.05em;">{masked}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        c1, c2 = st.columns([3, 1])
+        with c2:
+            if st.button("🗑️  Key ဖျက်", use_container_width=True):
+                clear_saved_key()
+                st.session_state.gemini_key = None
+                st.rerun()
+
+        key_input = st.session_state.gemini_key  # တိုက်ရိုက်သုံး
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    else:
+        st.info("💡  API Key တစ်ခါထည့်ပြီးရင် session တစ်ခုလုံး ပြန်ထည့်စရာ မလိုပါ")
+        key_input = st.text_input(
+            "Gemini API Key",
+            type="password",
+            placeholder="🔑  AIzaSy...",
+            label_visibility="collapsed"
+        )
+        if key_input and st.button("💾  Key သိမ်း", use_container_width=True):
+            if len(key_input.strip()) > 20:
+                save_key(key_input.strip())
+                st.session_state.gemini_key = key_input.strip()
+                st.success("✅ Key သိမ်းပြီးပါပြီ")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("❌ Key ပုံစံ မမှန်ပါ")
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # Language selector
+    lang_choice = st.radio(
+        "Transcript ဘာသာစကား",
+        ["မြန်မာ", "English", "Auto detect"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    lang_map = {"မြန်မာ": "my", "English": "en", "Auto detect": "auto"}
+    lang_code = lang_map[lang_choice]
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # Generate button
+    can_transcribe = vid is not None and st.session_state.gemini_key
+    if st.button(
+        "🎙️  Video ကနေ Transcript ထုတ်",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_transcribe,
+    ):
+        if vid is None:
+            st.error("📹  အရင်ဆုံး Video Upload လုပ်ပါ")
+        else:
+            with st.spinner("🎙️  Gemini နဲ့ Transcript ထုတ်နေသည်..."):
+                try:
+                    vid.seek(0)
+                    with open("input_transcribe.mp4", "wb") as f:
+                        f.write(vid.read())
+
+                    result = transcribe_with_gemini(
+                        "input_transcribe.mp4",
+                        st.session_state.gemini_key,
+                        lang_code
+                    )
+
+                    if result:
+                        st.session_state.script = result
+                        st.session_state.transcript_ready = True
+                        st.success(f"✅  Transcript ရပါပြီ — {len(result):,} လုံး")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error("❌  Transcript မရပါ")
+                except Exception as e:
+                    st.error(f"❌  {str(e)[:250]}")
+
+    if not can_transcribe:
+        if vid is None:
+            st.caption("📹  Video Upload လုပ်ပြီးမှ Transcript ထုတ်နိုင်မည်")
+        elif not st.session_state.gemini_key:
+            st.caption("🔑  API Key ထည့်ပြီးမှ Transcript ထုတ်နိုင်မည်")
+
+st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+# Script area (ဘယ် tab ဖြစ်ဖြစ် ဒီနေရာမှာ ပြ)
 script = st.text_area(
-    "Script", value=st.session_state.script, height=180,
+    "Script", value=st.session_state.script, height=200,
     label_visibility="collapsed",
     placeholder="✍️  မြန်မာ Script ဒီနေရာမှာ ရေးပါ (သို့) Paste လုပ်ပါ..."
 )
@@ -1121,6 +1373,7 @@ with c2:
     if st.button("🗑️  Clear", use_container_width=True):
         st.session_state.script = ""
         st.session_state.last_paste = ""
+        st.session_state.transcript_ready = False
         st.rerun()
 
 st.divider()
@@ -1140,7 +1393,7 @@ if vid:
 st.divider()
 
 
-# ---------- Effects (internal only, hidden from UI) ----------
+# ---------- Effects (internal only) ----------
 use_neon = True
 neon_animated = True
 neon_thickness = 15
