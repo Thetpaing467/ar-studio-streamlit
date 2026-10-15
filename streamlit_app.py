@@ -43,18 +43,17 @@ EDGE_VOICES = {
 EDGE_VOICE_FIXED = "male"
 
 # ==================== BGM DUCKING CONFIG ====================
-BGM_VOLUME = 0.25           # BGM အခြေခံ အသံ (0.0 - 1.0)
-BGM_DUCK_VOLUME = 0.08      # စကားပြောချိန် BGM အသံ (ducking)
-BGM_DUCK_THRESHOLD = 0.03   # ducking trigger threshold
-BGM_DUCK_RATIO = 8          # compression ratio
-BGM_DUCK_ATTACK = 20        # ms
-BGM_DUCK_RELEASE = 400      # ms
+BGM_VOLUME = 0.25
+BGM_DUCK_VOLUME = 0.08
+BGM_DUCK_THRESHOLD = 0.03
+BGM_DUCK_RATIO = 8
+BGM_DUCK_ATTACK = 20
+BGM_DUCK_RELEASE = 400
 
 st.set_page_config(page_title="Myanmar TTS Recap", page_icon="🎬", layout="centered")
 
 
 def _on_download_clear():
-    """Download နှိပ်ရင် Script + Video + Paste ရှင်း (Ref Audio / BGM မထိ)"""
     st.session_state.script = ""
     st.session_state.last_paste = ""
     st.session_state.paste_big = ""
@@ -491,7 +490,7 @@ def mux_audio(video_in, audio_in, output_video, tempo):
     return output_video
 
 
-# ==================== BGM MIX (Audio Ducking) ====================
+# ==================== BGM MIX (Audio Ducking) — FIXED ====================
 def mix_bgm_with_ducking(voice_path, bgm_path, output_path,
                          bgm_vol=BGM_VOLUME,
                          duck_vol=BGM_DUCK_VOLUME,
@@ -501,20 +500,28 @@ def mix_bgm_with_ducking(voice_path, bgm_path, output_path,
                          release=BGM_DUCK_RELEASE):
     """
     Voice + BGM ကို Audio Ducking နဲ့ ရောစပ်
-    - Voice ပေါ်ချိန် BGM အသံ အလိုအလျောက် နှိမ့်
-    - Voice ရပ်ချိန် BGM အသံ ပြန်ကျယ်
+    ⚠️ FIX: BGM speed မြန်နေတာ ပြင်ထားသည် (sample rate ညှိ + PTS reset)
     """
     vdur = audio_dur(voice_path)
 
-    # BGM ကို voice အရှည်နဲ့ တူအောင် loop + trim
     filter_complex = (
-        f"[1:a]aloop=loop=-1:size=2e+09,atrim=0:{vdur},"
+        # BGM — sample rate 48000 ညှိ + PTS reset (speed မပြောင်း)
+        f"[1:a]aresample=48000,asetpts=PTS-STARTPTS,"
+        f"aloop=loop=-1:size=2e+09:start=0,"
+        f"atrim=0:{vdur},asetpts=PTS-STARTPTS,"
         f"volume={bgm_vol}[bgm];"
-        f"[0:a]asplit=2[voice_main][voice_key];"
+
+        # Voice — sample rate 48000 ညှိ + PTS reset
+        f"[0:a]aresample=48000,asetpts=PTS-STARTPTS,"
+        f"asplit=2[voice_main][voice_key];"
+
+        # Ducking
         f"[bgm][voice_key]sidechaincompress="
         f"threshold={threshold}:ratio={ratio}:"
         f"attack={attack}:release={release}:"
         f"makeup=1[bgm_ducked];"
+
+        # Mix
         f"[voice_main][bgm_ducked]amix=inputs=2:duration=first:"
         f"dropout_transition=0:normalize=0[out]"
     )
@@ -526,6 +533,7 @@ def mix_bgm_with_ducking(voice_path, bgm_path, output_path,
         "-filter_complex", filter_complex,
         "-map", "[out]",
         "-c:a", "libmp3lame", "-b:a", AUDIO_BITRATE, "-ar", "48000",
+        "-shortest",
         output_path
     ]
     r = subprocess.run(cmd, capture_output=True, text=True,
@@ -850,10 +858,9 @@ vid = st.file_uploader(
 if vid: st.success(f"✅ {vid.size/(1024*1024):.1f} MB")
 st.divider()
 
-# ==================== Step 3 — Background Music (တစ်ခါပဲတောင်း) ====================
+# ==================== Step 3 — Background Music ====================
 st.subheader("🎵 Step 3 — Background Music (Optional)")
 
-# BGM ရှိပြီးသားဆို file uploader မပြတော့ဘူး
 if st.session_state.bgm_path and os.path.exists(st.session_state.bgm_path):
     st.success(f"✅ BGM: {st.session_state.bgm_name}")
     col_b1, col_b2 = st.columns([3, 1])
@@ -874,7 +881,6 @@ else:
     )
     if bgm_file:
         os.makedirs("bgm_store", exist_ok=True)
-        # hash နဲ့ သိမ်း (တူတဲ့ file ပြန်တင်ရင် cache)
         h = hashlib.md5(bgm_file.getvalue()).hexdigest()[:12]
         ext = os.path.splitext(bgm_file.name)[1] or ".mp3"
         dst = f"bgm_store/bgm_{h}{ext}"
@@ -885,7 +891,6 @@ else:
         st.success(f"✅ BGM သိမ်းပြီး: {bgm_file.name}")
         st.rerun()
 
-# BGM ရှိရင် volume slider ပြ
 if st.session_state.bgm_path:
     col_v1, col_v2 = st.columns(2)
     with col_v1:
@@ -1030,7 +1035,6 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
             final_voice = "voice.mp3"
     step_times["🎵 BGM"] = time.time() - t0
 
-    # BGM ပါရင် voice_bgm.mp3 ရဲ့ အရှည်ကို ပြန်တွက်
     if final_voice != "voice.mp3":
         adur2 = audio_dur(final_voice)
         tempo = max(0.5, min(2.0, adur2 / vdur))
