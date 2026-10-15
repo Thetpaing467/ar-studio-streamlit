@@ -24,7 +24,7 @@ FINAL_PRESET = "ultrafast"
 FINAL_CRF = 20
 USE_FAST_VAD = True
 AUDIO_BITRATE = "128k"
-TTS_CHUNK = 300      # သေးလေ subtitle sync ပိုတိကျ
+TTS_CHUNK = 300
 EDGE_CHUNK = 200
 TTS_WORKERS = 3
 PNG_WORKERS = 4
@@ -43,11 +43,465 @@ EDGE_VOICES = {
 }
 EDGE_VOICE_FIXED = "male"
 
-st.set_page_config(page_title="Myanmar TTS Recap", page_icon="🎬", layout="centered")
+st.set_page_config(
+    page_title="Myanmar TTS Recap",
+    page_icon="🎬",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
+
+
+# ==================== CSS ====================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+:root{
+  --bg-0:#0a0a14;
+  --bg-1:#12121f;
+  --bg-2:#1a1a2e;
+  --surface:rgba(255,255,255,0.04);
+  --surface-hi:rgba(255,255,255,0.07);
+  --border:rgba(255,255,255,0.08);
+  --border-hi:rgba(255,255,255,0.15);
+  --accent-1:#FF6B9D;
+  --accent-2:#C66BFF;
+  --accent-3:#6BA8FF;
+  --text:#e8e8f0;
+  --text-dim:#8888aa;
+  --text-muted:#5a5a7a;
+  --success:#4ade80;
+  --warn:#fbbf24;
+  --error:#f87171;
+}
+
+html, body, [class*="css"]{
+  font-family:'Inter','Pyidaungsu','Myanmar Text',sans-serif;
+  font-feature-settings:'cv11','ss01';
+}
+
+.stApp{
+  background:
+    radial-gradient(circle at 15% 10%, rgba(198,107,255,0.10), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(107,168,255,0.10), transparent 45%),
+    linear-gradient(160deg, var(--bg-0), var(--bg-1), var(--bg-0));
+  color:var(--text);
+  min-height:100vh;
+}
+
+#MainMenu, footer, header{visibility:hidden}
+.block-container{padding-top:2rem; padding-bottom:3rem; max-width:900px}
+
+/* ---------- Hero ---------- */
+.hero{
+  text-align:center;
+  padding:32px 20px 24px;
+  position:relative;
+}
+.hero::before{
+  content:'';
+  position:absolute;
+  top:0; left:50%;
+  transform:translateX(-50%);
+  width:60%; height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-2),transparent);
+}
+.main-title{
+  font-size:2.4rem; font-weight:900;
+  letter-spacing:-0.02em;
+  background:linear-gradient(110deg,#FF6B9D 0%,#C66BFF 45%,#6BA8FF 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  margin:0 0 8px;
+  line-height:1.1;
+}
+.main-sub{
+  color:var(--text-dim);
+  font-size:0.92rem;
+  font-weight:500;
+  letter-spacing:0.02em;
+}
+.hero-pill{
+  display:inline-block;
+  margin-top:14px;
+  padding:6px 14px;
+  border-radius:999px;
+  background:rgba(198,107,255,0.10);
+  border:1px solid rgba(198,107,255,0.25);
+  color:#c7a4ff;
+  font-size:0.75rem;
+  font-weight:600;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+}
+
+/* ---------- Section ---------- */
+.section-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:28px 0 14px;
+}
+.section-num{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:32px; height:32px;
+  border-radius:10px;
+  background:linear-gradient(135deg,var(--accent-2),var(--accent-3));
+  color:#fff;
+  font-weight:800;
+  font-size:0.85rem;
+  box-shadow:0 4px 12px rgba(198,107,255,0.35);
+  flex-shrink:0;
+}
+.section-title{
+  font-size:1.15rem;
+  font-weight:700;
+  color:var(--text);
+  letter-spacing:-0.01em;
+}
+.section-desc{
+  font-size:0.82rem;
+  color:var(--text-muted);
+  margin-left:44px;
+  margin-top:-8px;
+  margin-bottom:14px;
+}
+
+/* ---------- Buttons ---------- */
+.stButton>button{
+  background:linear-gradient(135deg,#667eea,#764ba2)!important;
+  color:#fff!important;
+  border:none!important;
+  border-radius:12px!important;
+  padding:12px 22px!important;
+  font-weight:600!important;
+  font-size:0.95rem!important;
+  letter-spacing:0.01em!important;
+  box-shadow:0 4px 16px rgba(102,126,234,0.28)!important;
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1)!important;
+}
+.stButton>button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 24px rgba(102,126,234,0.45)!important;
+  filter:brightness(1.08);
+}
+.stButton>button:active{transform:translateY(0)}
+
+.stButton>button[kind="primary"]{
+  background:linear-gradient(135deg,#FF6B9D,#C66BFF,#6BA8FF)!important;
+  background-size:200% 200%!important;
+  animation:gradientShift 4s ease infinite!important;
+  box-shadow:0 6px 24px rgba(198,107,255,0.4)!important;
+}
+@keyframes gradientShift{
+  0%,100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+
+/* ---------- Inputs ---------- */
+.stTextArea textarea,
+.stTextInput input{
+  background:rgba(255,255,255,0.035)!important;
+  border:1px solid var(--border)!important;
+  color:var(--text)!important;
+  border-radius:12px!important;
+  font-size:0.95rem!important;
+  transition:all 0.2s ease!important;
+}
+.stTextArea textarea:focus,
+.stTextInput input:focus{
+  border-color:var(--accent-2)!important;
+  box-shadow:0 0 0 3px rgba(198,107,255,0.15)!important;
+  background:rgba(255,255,255,0.05)!important;
+}
+.stTextArea textarea::placeholder,
+.stTextInput input::placeholder{
+  color:var(--text-muted)!important;
+}
+
+/* ---------- File Uploader ---------- */
+.stFileUploader{
+  background:var(--surface);
+  border:1.5px dashed var(--border-hi);
+  border-radius:14px;
+  padding:14px;
+  transition:all 0.25s ease;
+}
+.stFileUploader:hover{
+  border-color:var(--accent-3);
+  background:var(--surface-hi);
+}
+[data-testid="stFileUploaderDropzone"]{
+  background:transparent!important;
+  border:none!important;
+}
+
+/* ---------- Toggle ---------- */
+[data-testid="stToggle"] label{
+  color:var(--text)!important;
+  font-weight:500!important;
+}
+
+/* ---------- Slider ---------- */
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"]{
+  background:linear-gradient(135deg,var(--accent-2),var(--accent-3))!important;
+  border:none!important;
+  box-shadow:0 0 0 4px rgba(198,107,255,0.2)!important;
+}
+
+/* ---------- Alerts ---------- */
+.stAlert{
+  border-radius:12px!important;
+  border:none!important;
+  padding:12px 16px!important;
+  font-size:0.9rem!important;
+}
+
+/* ---------- Divider ---------- */
+hr{
+  border:none!important;
+  height:1px!important;
+  background:linear-gradient(90deg,transparent,var(--border),transparent)!important;
+  margin:28px 0!important;
+}
+
+/* ---------- Timer box ---------- */
+.timer-box{
+  background:linear-gradient(135deg,rgba(102,126,234,0.15),rgba(118,75,162,0.15));
+  border:1px solid rgba(198,107,255,0.25);
+  border-radius:20px;
+  padding:28px;
+  text-align:center;
+  margin:20px 0;
+  position:relative;
+  overflow:hidden;
+}
+.timer-box::before{
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--accent-1),var(--accent-2),var(--accent-3));
+  animation:shimmer 3s linear infinite;
+}
+@keyframes shimmer{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(100%)}
+}
+.timer-title{
+  color:var(--text-dim);
+  font-size:0.75rem;
+  font-weight:700;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+.timer-value{
+  color:#fff;
+  font-size:3.4rem;
+  font-weight:900;
+  line-height:1;
+  background:linear-gradient(135deg,#fff,#c7a4ff);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.timer-unit{
+  font-size:1.4rem;
+  font-weight:700;
+  margin-left:8px;
+  -webkit-text-fill-color:var(--text-dim);
+}
+
+/* ---------- Step chip ---------- */
+.step-chip{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:3px solid var(--accent-3);
+  border-radius:10px;
+  padding:12px 18px;
+  margin:8px 0;
+  font-size:0.9rem;
+  color:var(--text);
+}
+.step-chip b{
+  color:var(--accent-3);
+  font-size:1rem;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ---------- Status pills ---------- */
+.status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 12px;
+  border-radius:999px;
+  font-size:0.8rem;
+  font-weight:600;
+  letter-spacing:0.01em;
+}
+.status-ok{
+  background:rgba(74,222,128,0.12);
+  color:#86efac;
+  border:1px solid rgba(74,222,128,0.25);
+}
+.status-info{
+  background:rgba(107,168,255,0.12);
+  color:#a5c9ff;
+  border:1px solid rgba(107,168,255,0.25);
+}
+.status-warn{
+  background:rgba(251,191,36,0.12);
+  color:#fde68a;
+  border:1px solid rgba(251,191,36,0.25);
+}
+
+/* ---------- Paste zone ---------- */
+div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea{
+  background:linear-gradient(135deg,rgba(255,107,157,0.08),rgba(198,107,255,0.08))!important;
+  border:2px dashed rgba(198,107,255,0.45)!important;
+  border-radius:18px!important;
+  color:#fff!important;
+  font-size:1.02rem!important;
+  padding:22px!important;
+  text-align:center!important;
+  transition:all 0.25s ease!important;
+}
+div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea:hover{
+  border-color:rgba(198,107,255,0.7)!important;
+  background:linear-gradient(135deg,rgba(255,107,157,0.12),rgba(198,107,255,0.12))!important;
+}
+div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea:focus{
+  border-color:#C66BFF!important;
+  border-style:solid!important;
+  box-shadow:0 0 0 4px rgba(198,107,255,0.15),0 0 30px rgba(198,107,255,0.3)!important;
+}
+div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea::placeholder{
+  color:#b48cff!important;
+  font-weight:600!important;
+}
+
+/* ---------- Login card ---------- */
+.login-card{
+  max-width:420px;
+  margin:80px auto 20px;
+  padding:36px 32px 24px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:24px;
+  backdrop-filter:blur(20px);
+  box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  text-align:center;
+}
+.login-icon{
+  font-size:2.5rem;
+  margin-bottom:12px;
+  display:block;
+}
+.login-title{
+  font-size:1.5rem;
+  font-weight:800;
+  background:linear-gradient(110deg,#FF6B9D,#C66BFF,#6BA8FF);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  margin-bottom:6px;
+}
+.login-sub{
+  color:var(--text-muted);
+  font-size:0.85rem;
+  margin-bottom:20px;
+}
+
+/* ---------- Preview ---------- */
+.preview-frame{
+  border-radius:16px;
+  overflow:hidden;
+  border:1px solid var(--border);
+  box-shadow:0 12px 40px rgba(0,0,0,0.35);
+  margin:12px 0;
+}
+
+/* ---------- Video ---------- */
+video{
+  border-radius:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,0.4);
+}
+
+/* ---------- Download button ---------- */
+.stDownloadButton>button{
+  background:linear-gradient(135deg,#4ade80,#22c55e)!important;
+  color:#052e16!important;
+  font-weight:700!important;
+  box-shadow:0 6px 24px rgba(74,222,128,0.35)!important;
+}
+.stDownloadButton>button:hover{
+  box-shadow:0 10px 32px rgba(74,222,128,0.5)!important;
+  filter:brightness(1.05);
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==================== Helpers ====================
+def section(num, title, desc=""):
+    st.markdown(f"""
+    <div class="section-head">
+        <div class="section-num">{num}</div>
+        <div class="section-title">{title}</div>
+    </div>
+    {f'<div class="section-desc">{desc}</div>' if desc else ''}
+    """, unsafe_allow_html=True)
+
+
+def status(text, kind="ok"):
+    icons = {"ok": "✅", "info": "ℹ️", "warn": "⚠️"}
+    st.markdown(
+        f'<span class="status-pill status-{kind}">{icons[kind]} {text}</span>',
+        unsafe_allow_html=True
+    )
+
+
+# ==================== Auth ====================
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
+    st.markdown("""
+    <div class="login-card">
+        <span class="login-icon">🔐</span>
+        <div class="login-title">Private Access</div>
+        <div class="login-sub">Myanmar TTS Recap Studio</div>
+    </div>
+    """, unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        pwd = st.text_input("Password", type="password",
+                            label_visibility="collapsed",
+                            placeholder="🔑  Enter password")
+        if st.button("→  Unlock", use_container_width=True, type="primary"):
+            if pwd == PASSWORD:
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("❌ Password မှားနေပါတယ်")
+    st.stop()
+
+
+# ==================== Session Init ====================
+if "script" not in st.session_state: st.session_state.script = ""
+if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
 
 
 def _on_download_clear():
-    """Download နှိပ်ရင် Script + Video + Paste ရှင်း (Ref Audio မထိ)"""
     st.session_state.script = ""
     st.session_state.last_paste = ""
     st.session_state.paste_big = ""
@@ -55,61 +509,7 @@ def _on_download_clear():
     st.session_state.video_up_key = st.session_state.get("video_up_key", 0) + 1
 
 
-st.markdown("""
-<style>
-.stApp{background:linear-gradient(160deg,#0f0f23,#1a1a35,#0f0f23);color:#e8e8f0}
-#MainMenu,footer,header{visibility:hidden}
-.main-title{text-align:center;font-size:2.2rem;font-weight:900;
- background:linear-gradient(90deg,#ff6b9d,#c66bff,#6ba8ff);
- -webkit-background-clip:text;-webkit-text-fill-color:transparent;
- background-clip:text;margin-bottom:4px}
-.main-sub{text-align:center;color:#8888aa;font-size:.9rem;margin-bottom:20px}
-.stButton>button{background:linear-gradient(135deg,#667eea,#764ba2)!important;
- color:#fff!important;border:none!important;border-radius:10px!important;
- padding:12px 20px!important;font-weight:600!important;
- box-shadow:0 4px 15px rgba(102,126,234,.3)!important}
-.stTextArea textarea{background:rgba(255,255,255,.04)!important;
- border:1px solid rgba(255,255,255,.1)!important;color:#fff!important;
- border-radius:10px!important}
-.stFileUploader{background:rgba(255,255,255,.02);border-radius:10px;padding:8px}
-.stAlert{border-radius:10px!important;border:none!important}
-hr{border-color:rgba(255,255,255,.08);margin:24px 0}
-.timer-box{background:linear-gradient(135deg,#667eea,#764ba2);
- border-radius:16px;padding:24px;text-align:center;margin:15px 0;
- box-shadow:0 8px 30px rgba(102,126,234,.4)}
-.timer-title{color:#fff;font-size:.9rem;font-weight:600;letter-spacing:1px;margin-bottom:8px}
-.timer-value{color:#fff;font-size:3.2rem;font-weight:900;line-height:1}
-.timer-unit{font-size:1.5rem;font-weight:700;margin-left:8px}
-.step-timer{background:rgba(255,255,255,.05);border-left:4px solid #667eea;
- border-radius:10px;padding:12px 18px;margin:8px 0;color:#e8e8f0;font-size:.95rem}
-.step-timer b{color:#6ba8ff;font-size:1.05rem}
-</style>
-""", unsafe_allow_html=True)
-
-if "auth" not in st.session_state:
-    st.session_state.auth = False
-
-if not st.session_state.auth:
-    st.markdown("<div class='main-title'>🔐 Private App</div>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        pwd = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Password")
-        if st.button("Login", use_container_width=True):
-            if pwd == PASSWORD:
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.error("Password မှား")
-    st.stop()
-
-
-# ==================== Session State Init ====================
-if "script" not in st.session_state: st.session_state.script = ""
-if "video_up_key" not in st.session_state: st.session_state.video_up_key = 0
-
-
 # ==================== Utility Functions ====================
-
 def vid_info(p):
     pr = ffmpeg.probe(p)
     v = next(s for s in pr['streams'] if s['codec_type'] == 'video')
@@ -201,7 +601,6 @@ def split_for_sub(text, mc=30):
 
 
 def scr_to_srt_timed(pieces, total, path, mc=30):
-    """pieces = [(text, audio_seconds)] — chunk တစ်ခုချင်းစီမှာ အချိန် reset ဖြစ်လို့ drift မရှိ"""
     raw = sum(d for _, d in pieces)
     if raw <= 0: return None
     k = total / raw
@@ -417,7 +816,7 @@ def final_render(video_in, audio_in, output_video, tempo,
             except queue.Empty:
                 if stop.is_set(): return None
 
-    def reader():          # Decode thread
+    def reader():
         cap = cv2.VideoCapture(video_in)
         i = 0; p = 0
         try:
@@ -437,7 +836,7 @@ def final_render(video_in, audio_in, output_video, tempo,
             cap.release()
             qput(q_in, None)
 
-    def writer():          # ffmpeg pipe write thread
+    def writer():
         try:
             while True:
                 bts = qget(q_out)
@@ -500,7 +899,6 @@ def mux_audio(video_in, audio_in, output_video, tempo):
 
 
 def prepare_video_job(video_in, fw_model):
-    """Whisper/VAD နဲ့ speech segments ပဲ ရှာ (TTS နဲ့ တပြိုင်နက် run)"""
     segments = whisper_fast(video_in, fw_model)
     if not segments: raise Exception("Speech မတွေ့")
     kept, vfps = keep_count(video_in, segments)
@@ -509,7 +907,6 @@ def prepare_video_job(video_in, fw_model):
 
 
 # ==================== Preview ====================
-
 def draw_tiktok_border_preview(img, thickness=30, animated_phase=0.0):
     import math
     d = ImageDraw.Draw(img, "RGBA")
@@ -535,8 +932,7 @@ def draw_tiktok_border_preview(img, thickness=30, animated_phase=0.0):
     return img
 
 
-# ==================== TTS Functions ====================
-
+# ==================== TTS ====================
 def tts_demo(chunks, ref, space, cb=None):
     cl = Client(space); files = []; rf = handle_file(ref) if ref else None
     for i, c in enumerate(chunks):
@@ -621,11 +1017,10 @@ def edge_tts_run(chunks, out_path, cb=None, workers=TTS_WORKERS):
 
     good = [a for a in results if a]
     if not good:
-        raise Exception("Edge TTS အသံမရပါ — edge-tts ကို update လုပ်ပါ (edge-tts>=7.0.0) / ခဏနေ ပြန်စမ်းပါ")
+        raise Exception("Edge TTS အသံမရပါ — edge-tts update လုပ်ပါ (edge-tts>=7.0.0)")
     if skipped:
         st.warning("⚠️ ကျော်လိုက်တဲ့ အပိုင်း: " + " | ".join(chunks[i][:30] for i in skipped))
 
-    # chunk တစ်ခုချင်းရဲ့ အမှန်တကယ် အသံအရှည်
     pieces = [(chunks[i], audio_dur(a)) for i, a in enumerate(results) if a]
 
     with open("edge_concat.txt", "w", encoding="utf-8") as f:
@@ -639,7 +1034,7 @@ def edge_tts_run(chunks, out_path, cb=None, workers=TTS_WORKERS):
 
 def tts_free(chunks, out, cb=None):
     out, pieces = edge_tts_run(chunks, out, cb=cb)
-    st.success("✅ Edge TTS — 👨 သီဟ (Thiha)")
+    status("Edge TTS — 👨 Thiha (သီဟ)", "ok")
     return out, pieces
 
 
@@ -657,7 +1052,7 @@ def tts_all(text, out, ref=None, cb=None, use_voxcpm=True):
                 files = tts_demo(chunks, ref, s["space"], cb)
             else:
                 files = tts_burmese(chunks, ref, s["space"], cb)
-            st.success("✅ VoxCPM2 — အောင်မြင်")
+            status("VoxCPM2 — အောင်မြင်", "ok")
             break
         except Exception as e:
             st.warning(f"⚠️ VoxCPM2 — Fail: {str(e)[:80]}")
@@ -728,120 +1123,118 @@ def whisper_fast(video_path, model=None):
 
 
 # ==================== UI ====================
+st.markdown("""
+<div class="hero">
+    <div class="main-title">🎬 Myanmar TTS Recap</div>
+    <div class="main-sub">Video → Script → VoxCPM2 / Edge TTS → Cinematic Recap</div>
+    <div class="hero-pill">AI-Powered Studio</div>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown("<div class='main-title'>🎬 Myanmar TTS Recap</div>", unsafe_allow_html=True)
-st.markdown("<div class='main-sub'>Video → Script → VoxCPM2 / Edge TTS သီဟ → Recap</div>", unsafe_allow_html=True)
-st.divider()
 
-with st.expander("📄 Transcript ထုတ်ယူမယ် (Gemini Canvas)", expanded=False):
-    st.link_button("↗️ Canvas ကို Tab အသစ်မှာ ဖွင့်", CANVAS_URL, use_container_width=True)
-    st.caption("Canvas ဖွင့် → Transcript Copy → အောက်က box ထဲ Paste လုပ်ပါ")
+# ---------- Step 1 — Script ----------
+section("1", "Script Input", "Gemini Canvas မှ Transcript ကို copy → paste")
+
+with st.expander("📄  Transcript ထုတ်ယူမည့် Canvas ဖွင့်ရန်", expanded=False):
+    st.link_button("↗️  Open Gemini Canvas", CANVAS_URL, use_container_width=True)
+    st.caption("Canvas ဖွင့် → Transcript Copy → အောက်က Paste Box ထဲ Paste")
 
 st.markdown("""
-<div style="text-align:center;margin:8px 0 4px">
-  <span style="font-size:1.1rem;font-weight:700;
-    background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-    background-clip:text">
-    📋  Paste Box
-  </span>
+<div style="text-align:center;margin:16px 0 8px">
+    <span style="font-size:1rem;font-weight:700;
+        background:linear-gradient(90deg,#FF6B9D,#C66BFF,#6BA8FF);
+        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+        background-clip:text">
+        📋  Quick Paste
+    </span>
 </div>
 """, unsafe_allow_html=True)
 
 pasted_now = st.text_area(
-    "paste",
-    value="",
-    height=80,
-    key="paste_big",
+    "paste", value="", height=80, key="paste_big",
     label_visibility="collapsed",
-    placeholder="📋  ဒီနေရာကို Long-press → Paste  (သို့)  Ctrl+V  —  ချက်ချင်း Script ထဲ ရောက်မယ်",
+    placeholder="📋  Long-press → Paste  (or Ctrl+V)  —  Auto ဖြည့်ပေးမည်"
 )
-
-st.markdown("""
-<style>
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea {
-  background:linear-gradient(135deg,rgba(255,107,157,.12),rgba(198,107,255,.12))!important;
-  border:2px dashed rgba(198,107,255,.55)!important;
-  border-radius:18px!important;
-  color:#fff!important;
-  font-size:1.05rem!important;
-  padding:22px!important;
-  text-align:center!important;
-}
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea:focus {
-  border-color:#C66BFF!important;
-  border-style:solid!important;
-  box-shadow:0 0 24px rgba(198,107,255,.5)!important;
-}
-div[data-testid="stTextArea"]:has(textarea[aria-label="paste"]) textarea::placeholder {
-  color:#b48cff!important;
-  font-weight:600!important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 if pasted_now and pasted_now.strip():
     clean = pasted_now.strip()
     if clean != st.session_state.get("last_paste", ""):
         st.session_state.last_paste = clean
-        lines = [l.strip().strip('"\u201c\u201d').strip()
-                 for l in clean.splitlines()]
+        lines = [l.strip().strip('"\u201c\u201d').strip() for l in clean.splitlines()]
         result = "\n\n".join(l for l in lines if l)
         st.session_state.script = result
         st.session_state.paste_big = ""
-        st.success(f"✅ Script ထဲ Auto ရောက်သွားပြီ — {len(result)} လုံး")
         st.rerun()
 
-script = st.text_area("Script", value=st.session_state.script, height=180,
-                      label_visibility="collapsed", placeholder="မြန်မာ Script paste...")
+script = st.text_area(
+    "Script", value=st.session_state.script, height=180,
+    label_visibility="collapsed",
+    placeholder="✍️  မြန်မာ Script ဒီနေရာမှာ ရေးပါ (သို့) Paste လုပ်ပါ..."
+)
 st.session_state.script = script
 
 c1, c2 = st.columns([3, 1])
-with c1: st.caption(f"📝 {len(script):,}")
+with c1:
+    st.caption(f"📝  {len(script):,} characters")
 with c2:
-    if st.button("🗑️ Clear", use_container_width=True):
+    if st.button("🗑️  Clear", use_container_width=True):
         st.session_state.script = ""
         st.session_state.last_paste = ""
         st.rerun()
+
 st.divider()
 
-# ==================== Step 2 — Video ====================
-st.subheader("📁 Step 2 — Video")
+
+# ---------- Step 2 — Video ----------
+section("2", "Video Upload", "MP4 / MOV / AVI / MKV")
+
 vid = st.file_uploader(
-    "📹",
-    type=["mp4","mov","avi","mkv"],
+    "Video", type=["mp4", "mov", "avi", "mkv"],
     label_visibility="collapsed",
     key=f"video_up_{st.session_state.video_up_key}"
 )
-if vid: st.success(f"✅ {vid.size/(1024*1024):.1f} MB")
+if vid:
+    status(f"{vid.size/(1024*1024):.1f} MB  —  {vid.name}", "ok")
+
 st.divider()
 
+
+# ---------- Step 3 — Effects ----------
+section("3", "Effects", "Auto applied: Neon Border + Mirror")
 use_neon = True
 neon_animated = True
 neon_thickness = 15
 neon_speed = 0.4
 
-# ==================== Step 4 — Subtitle ====================
-st.subheader("📝 Step 4 — Subtitle")
-use_sub = st.toggle("Burn-in", value=True)
+status("Neon Border — Auto ON", "info")
+st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+status("Mirror Flip — Auto ON", "info")
+
+
+# ---------- Step 4 — Subtitle ----------
+section("4", "Subtitle", "Burn-in captions ထည့်မည်")
+use_sub = st.toggle("🎬  Enable Subtitle Burn-in", value=True)
 pos_y = 100
 if use_sub:
-    pos_y = st.slider("📍 Position", 0, 100, 100, 1)
+    pos_y = st.slider("📍  Position (%)", 0, 100, 100, 1)
+
 st.divider()
 
-# ==================== Step 5 — Preview ====================
+
+# ---------- Step 5 — Preview ----------
 if vid:
-    st.subheader("🖼️ Step 5 — Preview")
-    with st.spinner("Preview..."):
+    section("5", "Preview", "နောက်ဆုံး output ပုံစံ")
+    with st.spinner("🖼️  Preview ပြင်ဆင်နေသည်..."):
         pkey = (vid.name, vid.size)
         if st.session_state.get("pkey") != pkey or not os.path.exists("preview.mp4"):
             vid.seek(0)
-            with open("preview.mp4", "wb") as f: f.write(vid.read())
+            with open("preview.mp4", "wb") as f:
+                f.write(vid.read())
             st.session_state.pkey = pkey
-        W, H, _ = vid_info("preview.mp4")
 
-        render_png("စာတန်းထိုး Preview", "prev.png", FONT_FILE, W, H, FS, pos_y, BH, BA,
-                   box_width_ratio=BOX_WIDTH_RATIO)
+        W, H, _ = vid_info("preview.mp4")
+        render_png("စာတန်းထိုး Preview", "prev.png", FONT_FILE, W, H, FS, pos_y,
+                   BH, BA, box_width_ratio=BOX_WIDTH_RATIO)
 
         cap = cv2.VideoCapture("preview.mp4")
         ok, fr = cap.read()
@@ -854,81 +1247,108 @@ if vid:
 
             if use_neon:
                 phase = 0.5 if neon_animated else 0.0
-                comp = draw_tiktok_border_preview(comp, thickness=neon_thickness,
-                                                  animated_phase=phase)
+                comp = draw_tiktok_border_preview(
+                    comp, thickness=neon_thickness, animated_phase=phase
+                )
 
             pw = 720
-            comp.resize((pw, int(H * (pw / W))), Image.LANCZOS).convert("RGB").save("prev_out.png")
+            comp.resize((pw, int(H * (pw / W))), Image.LANCZOS)\
+                .convert("RGB").save("prev_out.png")
             st.image("prev_out.png", use_container_width=True)
             if use_neon and neon_animated:
-                st.caption("🎬 Animated — Output Video မှာ အလင်းတန်း ပတ်ပြေးနေမည်")
-st.divider()
+                st.caption("🎬  Animated — Output မှာ အလင်းတန်း ရွေ့လျားနေမည်")
+    st.divider()
 
-# ==================== Step 6 — Generate ====================
-st.subheader("🚀 Step 6 — Generate")
 
-use_voxcpm = st.toggle("🎙️ VoxCPM2 သုံးမလား?", value=True)
+# ---------- Step 6 — Generate ----------
+section("6", "Generate", "Final recap video ဖန်တီးမည်")
+
+use_voxcpm = st.toggle("🎙️  VoxCPM2 သုံးမလား? (Fail ဖြစ်ရင် Edge TTS auto)", value=True)
 
 if use_voxcpm:
-    st.info("✅ VoxCPM2 သုံးမယ် — Fail/Busy ရင် — Edge TTS သီဟ Auto")
-    ref = st.file_uploader("🎤 Ref Audio (VoxCPM2) — Optional",
-                           type=["wav","mp3","m4a"], key="ref_up")
+    status("VoxCPM2 သုံးမည် — Fail/Busy ဖြစ်ရင် Edge TTS သီဟ Auto", "info")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    ref = st.file_uploader(
+        "🎤  Reference Audio (Optional)",
+        type=["wav", "mp3", "m4a"], key="ref_up"
+    )
     if ref:
-        with open("ref.wav", "wb") as f: f.write(ref.read())
+        with open("ref.wav", "wb") as f:
+            f.write(ref.read())
         st.session_state.ref = "ref.wav"
-        st.success("✅ Ref Audio")
+        status("Reference Audio loaded", "ok")
     else:
         if os.path.exists("ref.wav"):
             st.session_state.ref = "ref.wav"
-            st.caption("📎 Ref Audio (အရင် ထည့်ထားတာ ဆက်ရှိနေတယ်)")
+            st.caption("📎  Ref Audio (session မှ အရင်ထည့်ထားတာ ဆက်ရှိ)")
         else:
             st.session_state.ref = None
 else:
-    st.info("⚡ Edge TTS သီဟ (Thiha) — ပဲ သုံးမယ်")
+    status("Edge TTS သီဟ (Thiha) — သာ သုံးမည်", "info")
     st.session_state.ref = None
 
-if st.button("✨ Generate Recap Video", type="primary", use_container_width=True):
-    if not script.strip(): st.error("Script paste"); st.stop()
-    if vid is None: st.error("Video Upload"); st.stop()
+st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-    total_start = time.time(); step_times = {}
+if st.button("✨  Generate Recap Video", type="primary", use_container_width=True):
+    if not script.strip():
+        st.error("📝  Script paste လုပ်ပါ")
+        st.stop()
+    if vid is None:
+        st.error("📹  Video Upload လုပ်ပါ")
+        st.stop()
+
+    total_start = time.time()
+    step_times = {}
     script_n = normalize_script(script)
-    if not script_n.strip(): st.error("Script မှာ စာမပါပါ"); st.stop()
+    if not script_n.strip():
+        st.error("Script မှာ စာအသုံးပြုနိုင်တာ မပါပါ")
+        st.stop()
+
     vid.seek(0)
-    with open("input.mp4", "wb") as f: f.write(vid.read())
+    with open("input.mp4", "wb") as f:
+        f.write(vid.read())
 
     fw_model = None
     if not USE_FAST_VAD:
-        try: fw_model = get_fw_model()
-        except Exception: pass
+        try:
+            fw_model = get_fw_model()
+        except Exception:
+            pass
 
-    # Whisper/VAD ကို TTS နဲ့ တပြိုင်နက် run
     job_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     job = job_pool.submit(prepare_video_job, "input.mp4", fw_model)
 
     t0 = time.time()
-    pb = st.progress(0); txt = st.empty()
-    def cb(i, tot, c): pb.progress((i+1)/tot); txt.caption(f"[{i+1}/{tot}]")
+    pb = st.progress(0)
+    txt = st.empty()
+
+    def cb(i, tot, c):
+        pb.progress((i + 1) / tot)
+        txt.caption(f"🎙️  TTS — {i + 1}/{tot}")
+
     try:
-        _, pieces = tts_all(script_n, "voice.mp3", ref=st.session_state.get("ref"),
+        _, pieces = tts_all(script_n, "voice.mp3",
+                            ref=st.session_state.get("ref"),
                             cb=cb, use_voxcpm=use_voxcpm)
     except Exception as e:
-        st.error(f"TTS: {e}"); st.stop()
+        st.error(f"TTS: {e}")
+        st.stop()
     step_times["🎙️ TTS"] = time.time() - t0
 
     t0 = time.time()
     try:
         info = job.result()
     except Exception as e:
-        st.error(f"❌ Cut: {e}"); st.stop()
+        st.error(f"❌ Cut: {e}")
+        st.stop()
     job_pool.shutdown(wait=False)
     segments, vdur = info["segments"], info["vdur"]
 
     adur = audio_dur("voice.mp3")
     tempo = max(0.5, min(2.0, adur / vdur))
-    eff = adur / tempo     # atempo ပြီးနောက် အသံအရှည်အမှန်
+    eff = adur / tempo
 
-    with st.spinner("🎬 Finalizing..."):
+    with st.spinner("🎬  Final rendering..."):
         try:
             sp = scr_to_srt_timed(pieces, eff, "sub.srt") if use_sub else None
             final_render("input.mp4", None, "video_only.mp4", 1.0,
@@ -938,7 +1358,7 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
                          segments=segments)
             mux_audio("video_only.mp4", "voice.mp3", "final.mp4", tempo)
         except Exception as e:
-            st.warning(f"⚠️ Fail: {e}")
+            st.warning(f"⚠️  Fallback render: {e}")
             simple_merge("input.mp4", "voice.mp3", "final.mp4", tempo, segments)
     step_times["🎬 Render"] = time.time() - t0
 
@@ -946,19 +1366,24 @@ if st.button("✨ Generate Recap Video", type="primary", use_container_width=Tru
 
     st.markdown(f"""
     <div class="timer-box">
-        <div class="timer-title">⏱️ TOTAL TIME</div>
+        <div class="timer-title">⏱  Total Processing Time</div>
         <div class="timer-value">{total_elapsed:.1f}<span class="timer-unit">sec</span></div>
     </div>
     """, unsafe_allow_html=True)
 
     for name, t in step_times.items():
-        st.markdown(f"<div class='step-timer'>{name} — <b>{t:.1f}s</b></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='step-chip'><span>{name}</span><b>{t:.1f}s</b></div>",
+            unsafe_allow_html=True
+        )
 
-    st.success(f"✅ Done — ⏱️ {total_elapsed:.1f}s")
+    status(f"Complete — {total_elapsed:.1f}s", "ok")
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
     st.video("final.mp4")
     with open("final.mp4", "rb") as f:
         st.download_button(
-            "📥 Download",
+            "📥  Download Recap Video",
             f,
             file_name="recap.mp4",
             on_click=_on_download_clear,
