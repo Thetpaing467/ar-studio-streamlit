@@ -6,3 +6,4 @@ Pillow
 edge-tts
 openai-whisper
 gradio_client
+google-genai
