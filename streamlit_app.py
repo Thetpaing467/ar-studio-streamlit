@@ -33,11 +33,6 @@ CANVAS_URL = "https://gemini.google.com/share/a96d9ba3e76e"
 WHISPER_MODEL = "tiny"
 WHISPER_LANG = "my"
 
-# ---- Gemini Auto Script ----
-GEMINI_MODEL = "gemini-3.6-flash"   # model ID မတူရင် ဒီမှာပြင်ပါ
-GEMINI_CPS = 9                      # video 1 စက္ကန့်ကို Burmese စာလုံးအရေအတွက် (ချိန်ညှိနိုင်)
-KEY_FILE = ".gemini_key"
-
 BOX_WIDTH_RATIO = 1.0
 PADDING_Y = 15
 CORNER_RADIUS = 20
@@ -884,73 +879,6 @@ def draw_tiktok_border_preview(img, thickness=30, animated_phase=0.0):
     return img
 
 
-# ==================== Gemini Auto Script ====================
-def get_api_key():
-    k = st.session_state.get("gem_key")
-    if k: return k
-    try:
-        k = st.secrets.get("GEMINI_API_KEY")
-    except Exception:
-        k = None
-    k = k or os.environ.get("GEMINI_API_KEY")
-    if not k and os.path.exists(KEY_FILE):
-        try:
-            k = open(KEY_FILE, encoding="utf-8").read().strip()
-        except Exception:
-            k = None
-    if k: st.session_state.gem_key = k
-    return k or None
-
-
-def save_api_key(k):
-    k = k.strip()
-    st.session_state.gem_key = k
-    try:
-        with open(KEY_FILE, "w", encoding="utf-8") as f: f.write(k)
-    except Exception:
-        pass
-
-
-def gemini_make_script(video_path, api_key, vdur):
-    from google import genai
-    client = genai.Client(api_key=api_key)
-
-    # upload မြန်အောင် video ကို သေးသေးလေးလုပ်
-    small = "gem_in.mp4"
-    subprocess.run([
-        "ffmpeg", "-y", "-i", video_path,
-        "-vf", "scale=-2:360", "-r", "8",
-        "-c:v", "libx264", "-crf", "32", "-preset", "ultrafast",
-        "-c:a", "aac", "-b:a", "64k", small
-    ], capture_output=True, check=True)
-
-    f = client.files.upload(file=small)
-    t0 = time.time()
-    while f.state.name == "PROCESSING":
-        if time.time() - t0 > 180: raise Exception("Gemini video processing timeout")
-        time.sleep(2)
-        f = client.files.get(name=f.name)
-    if f.state.name != "ACTIVE":
-        raise Exception(f"Gemini file state: {f.state.name}")
-
-    target = int(vdur * GEMINI_CPS)
-    prompt = f"""ဒီ video ကို အသေအချာကြည့်ပြီး မြန်မာဘာသာနဲ့ recap narration transcript ရေးပေးပါ။
-စည်းကမ်းများ:
-- Video ထဲက အဖြစ်အပျက်တွေကို အစီအစဉ်တကျ ပြန်ပြောပြသလို ရေးပါ။
-- စာလုံးရေ အကြမ်းဖျင်း {target} ဝန်းကျင် (video အရှည် {vdur:.0f} စက္ကန့်နဲ့ ကိုက်အောင်)။
-- ဝါကျတိုင်းကို "။" နဲ့ ပိတ်ပါ။ စာပိုဒ်လေးတွေခွဲပါ။
-- Markdown, emoji, ကိုးကားသင်္ကေတ, ခေါင်းစဉ်, အချိန်, စကားပြောသူအမည် လုံးဝမထည့်ပါနဲ့။
-- Transcript စာသားသီးသန့်ပဲ ပြန်ပေးပါ၊ ရှင်းလင်းချက်မထည့်ပါနဲ့။"""
-    resp = client.models.generate_content(model=GEMINI_MODEL, contents=[f, prompt])
-    try: client.files.delete(name=f.name)
-    except Exception: pass
-
-    txt = (resp.text or "").strip()
-    txt = re.sub(r"^```\w*|```$", "", txt, flags=re.M).strip()
-    if not txt: raise Exception("Gemini က script မထုတ်ပေးပါ")
-    return txt
-
-
 # ==================== TTS ====================
 def tts_demo(chunks, ref, space, cb=None):
     cl = Client(space); files = []; rf = handle_file(ref) if ref else None
@@ -1142,9 +1070,11 @@ def whisper_fast(video_path, model=None):
 
 
 # ==================== UI ====================
+# (Hero section ကို လုံးလုံး ဖျောက်ထားပါသည်)
+
 
 # ---------- Step 1 — Script ----------
-section("1", "Script Input", "Gemini Canvas မှ Transcript ကို copy → paste (သို့) Step 5 မှာ Gemini Auto Script သုံးပါ")
+section("1", "Script Input", "Gemini Canvas မှ Transcript ကို copy → paste")
 
 with st.expander("📄  Transcript ထုတ်ယူမည့် Canvas ဖွင့်ရန်", expanded=False):
     st.link_button("↗️  Open Gemini Canvas", CANVAS_URL, use_container_width=True)
@@ -1267,24 +1197,6 @@ if vid:
 # ---------- Step 5 — Generate ----------
 section("5", "Generate", "Final recap video ဖန်တီးမည်")
 
-# ----- Gemini Auto Script -----
-use_auto = st.toggle("🤖  Gemini Auto Script (Video ကနေ transcript အလိုအလျောက်)", value=True)
-if use_auto:
-    saved = get_api_key()
-    if saved:
-        status(f"Gemini API Key သိမ်းပြီးသား — {GEMINI_MODEL}", "ok")
-        with st.expander("🔑  Key ပြောင်းရန်"):
-            nk = st.text_input("New key", type="password", key="gem_new")
-            if st.button("💾  Save", key="gem_save_new") and nk.strip():
-                save_api_key(nk); st.rerun()
-    else:
-        nk = st.text_input("🔑  Gemini API Key", type="password",
-                           placeholder="AIza...", key="gem_new")
-        if st.button("💾  Save Key") and nk.strip():
-            save_api_key(nk); st.rerun()
-        st.caption("တစ်ခါထည့်ရင် ပြန်မတောင်းတော့ပါ")
-    st.divider()
-
 use_voxcpm = st.toggle("🎙️  VoxCPM2 သုံးမလား? (Fail ဖြစ်ရင် Edge TTS auto)", value=True)
 
 if use_voxcpm:
@@ -1312,42 +1224,23 @@ else:
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
 if st.button("✨  Generate Recap Video", type="primary", use_container_width=True):
-    if vid is None:
-        st.error("📹  Video Upload လုပ်ပါ")
-        st.stop()
-    if not use_auto and not script.strip():
+    if not script.strip():
         st.error("📝  Script paste လုပ်ပါ")
         st.stop()
-    if use_auto and not get_api_key():
-        st.error("🔑  Gemini API Key ထည့်ပြီး Save လုပ်ပါ")
+    if vid is None:
+        st.error("📹  Video Upload လုပ်ပါ")
         st.stop()
 
     total_start = time.time()
     step_times = {}
-
-    vid.seek(0)
-    with open("input.mp4", "wb") as f:
-        f.write(vid.read())
-
-    # ----- Auto script from video -----
-    if use_auto:
-        t0 = time.time()
-        with st.spinner("🤖  Gemini က script ရေးနေသည်..."):
-            try:
-                _, _, vd = vid_info("input.mp4")
-                script = gemini_make_script("input.mp4", get_api_key(), vd)
-                st.session_state.script = script
-            except Exception as e:
-                st.error(f"Gemini: {e}")
-                st.stop()
-        step_times["🤖 Gemini Script"] = time.time() - t0
-        with st.expander("📄  ထုတ်ပေးတဲ့ Script ကြည့်ရန်"):
-            st.write(script)
-
     script_n = normalize_script(script)
     if not script_n.strip():
         st.error("Script မှာ စာအသုံးပြုနိုင်တာ မပါပါ")
         st.stop()
+
+    vid.seek(0)
+    with open("input.mp4", "wb") as f:
+        f.write(vid.read())
 
     fw_model = None
     if not USE_FAST_VAD:
