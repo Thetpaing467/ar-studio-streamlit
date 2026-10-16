@@ -1,9 +1,10 @@
-
 streamlit
 ffmpeg-python
 opencv-python-headless
 Pillow
-edge-tts
+numpy
+edge-tts>=7.0.0
 openai-whisper
+faster-whisper
 gradio_client
 google-genai
